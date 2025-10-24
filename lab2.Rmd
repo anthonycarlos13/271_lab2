@@ -1,0 +1,302 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r imports}
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+# install.packages("fredr")
+library(fredr)
+# install.packages("DescTools")
+library(DescTools)
+```
+
+# Task 1
+
+[Notes]{.underline}
+
+Q1: 01-01, Q2: 04-01, Q3: 07-01, Q4: 10-01
+
+```{r Obtain Data (Quarterly)}
+api_key <- '3949fd9fcfaa43711339ce7b8a243180'
+
+fredr_set_key(api_key)
+
+
+# Federal Funds Effective Rate (FFER)
+ffer_full <- fredr(
+  series_id = "FEDFUNDS",
+  frequency = "q",              # quarterly
+  aggregation_method = "avg",
+  observation_start = as.Date("1980-01-01")
+)
+
+head(ffer_full)
+
+
+
+# Personal Consumption Expenditures Index (PCEPI) - Inflation measure
+pcepi_full <- fredr(
+  series_id = "PCEPI",
+  frequency = "q",
+  aggregation_method = "avg",
+  observation_start = as.Date("1980-01-01")
+)
+
+head(pcepi_full)
+
+
+
+# Real GDP
+gdp_full <- fredr(
+  series_id = "GDPC1",
+  frequency = "q",
+  aggregation_method = "avg",
+  observation_start = as.Date("1980-01-01")
+)
+
+head(gdp_full)
+
+
+# Potential Real GDP
+pot_gdp_full <- fredr(
+  series_id = "GDPPOT",
+  frequency = "q",
+  aggregation_method = "avg",
+  observation_start = as.Date("1980-01-01")
+)
+
+head(pot_gdp_full)
+
+
+```
+
+```{r Construct Variables}
+# Add pct_chg_pce col to PCE series
+t_val <- pcepi_full$value
+t_minus_one_val <- lag(pcepi_full$value, 1)
+pcepi_full$pct_chg_pce <- (t_val - t_minus_one_val) / t_minus_one_val
+
+# Create GDP output gap series in same format as others
+gdp_full <- gdp_full %>% rename(GDPC1 = value) 
+pot_gdp_full <- pot_gdp_full %>% rename(GDPPOT = value) 
+
+head(gdp_full)
+gdp_merged <- inner_join(gdp_full, pot_gdp_full, by='date')
+
+# Add Output Gap col to GDP series
+gdp_merged$output_gap <- (gdp_merged$GDPC1 - gdp_merged$GDPPOT) * 100 / gdp_merged$GDPPOT
+
+gdp_merged$series_id <- 'OUTPUTGAP'
+gdp_merged <- gdp_merged %>% rename(realtime_start = realtime_start.x, realtime_end = realtime_end.x, value=output_gap)
+
+output_gap <- gdp_merged %>% select(date, series_id, value, realtime_start, realtime_end)
+```
+
+```{r FFER Plot + Summary Statistics}
+
+ffer_full %>% 
+  ggplot(aes(x = date, y = value)) + 
+  geom_line() + 
+  labs(title = "Federal Funds Effective Rate (FFER)",
+       x = "date",
+       y = 'FFER')
+
+ffer_full %>%
+  summarize(
+    mean = mean(value, na.rm = TRUE),
+    var_value  = var(value, na.rm = TRUE),
+    sd_value   = sd(value, na.rm = TRUE),
+    n_obs      = n()
+  )
+
+```
+
+\<Comments\>
+
+```{r PCEPI Plot + Summary Statistics}
+pcepi_full %>% 
+  ggplot(aes(x = date, y = value)) + 
+  geom_line() + 
+  labs(title = "Personal Consumption Expenditures Index (PCEPI)",
+       x = "date",
+       y = 'PCEPI')
+
+pcepi_full %>%
+  summarize(
+    mean = mean(value, na.rm = TRUE),
+    var_value  = var(value, na.rm = TRUE),
+    sd_value   = sd(value, na.rm = TRUE),
+    n_obs      = n()
+  )
+
+pcepi_full %>% 
+  ggplot(aes(x = date, y = pct_chg_pce)) + 
+  geom_line() + 
+  labs(title = "Pct Change PCE",
+       x = "date",
+       y = 'Pct Change PCE')
+```
+
+\<Comments\>
+
+```{r GDP Plot + Summary Statistics}
+# Do regular GDP, POT GDP, and output gap
+
+gdp_full %>% 
+  ggplot(aes(x = date, y = GDPC1)) + 
+  geom_line() + 
+  labs(title = "Real GDP ",
+       x = "date",
+       y = 'GDP')
+
+gdp_full %>%
+  summarize(
+    mean = mean(GDPC1, na.rm = TRUE),
+    var_value  = var(GDPC1, na.rm = TRUE),
+    sd_value   = sd(GDPC1, na.rm = TRUE),
+    n_obs      = n()
+  )
+
+pot_gdp_full %>% 
+  ggplot(aes(x = date, y = GDPPOT)) + 
+  geom_line() + 
+  labs(title = "Potential Real GDP ",
+       x = "date",
+       y = 'GDPPOT')
+
+pot_gdp_full %>%
+  summarize(
+    mean = mean(GDPPOT, na.rm = TRUE),
+    var_value  = var(GDPPOT, na.rm = TRUE),
+    sd_value   = sd(GDPPOT, na.rm = TRUE),
+    n_obs      = n()
+  )
+
+output_gap %>% 
+  ggplot(aes(x = date, y = value)) + 
+  geom_line() + 
+  labs(title = "Output gap",
+       x = "date",
+       y = 'Output gap')
+```
+
+\<Comments\>
+
+# Task 2
+
+**2.1: Frequency Alignment (Resampling)**
+
+Based on the format of the API call to FRED, data is received at a quarterly cadence, with an average over all months in the quarter calculated and returned in the dataframe. No resampling was done.
+
+```{r Ensure same quarterly date index for all series}
+
+
+ensure_same_dates <- ffer_full %>% 
+  full_join(gdp_full, by='date') %>%
+  full_join(pcepi_full, by='date') %>% 
+  full_join(pot_gdp_full, by='date') %>%
+  full_join(output_gap, by='date')
+
+
+sum(is.na(ensure_same_dates$date))
+```
+
+**2.2: Outlier Detection & Treatment**
+
+[Method: Winsorization]{.underline}
+
+To detect outliers, we've chosen to use winsorizing. We prefer this method because based on a visual examination of FFER, PECPI, and GDP data, scores appear to be mostly following either an upward trend or a fluctuating downward trend, with few outliers. A Hampel filter, which relies on deviations from a median, does not seem best-suited to data that is not stationary - depsite the fact that the median is calculated in a rolling window, if the trend is irregular, deviations from the median may be normal, but marked as outliers based on the window. Z-scores, as well, is best suited to normally distributed data. Winsorizing allows for a percentile-based method that will account for values on a vastly different scale than previous values.
+
+Hampel filter - median absolute deviation rolling window. Winsorization won't take care of deviations in the middle of the data (ex. GDP outlier).
+
+[Outlier Detection]{.underline}
+
+We specify a 1st/99th percentile cutoff for winsorization and winsorize the FFER, PECPI, GDP, GDPPOT, and output gap timeseries.
+
+```{r Winsorize}
+
+ffer_full
+
+#pcepi_full
+#gdp_full
+#pot_gdp_full
+#output_gap
+```
+
+**2.3: Seasonal Adjustment**
+
+```{r}
+# # Split into train and test set 
+ffer_train <- ffer_full %>% filter(date >= as.Date('1980-01-01') & date <= as.Date('2023-10-01'))
+
+ffer_test <- ffer_full %>% filter(date >= as.Date('2024-01-01'))
+
+#  # # Split into train and test set 
+
+pcepi_train <- pcepi_full %>% filter(date >= as.Date('1980-01-01') & date <= as.Date('2023-10-01'))
+
+pcepi_test <- pcepi_full %>% filter(date >= as.Date('2024-01-01'))
+
+#  # # Split into train and test set 
+
+gdp_train <- gdp_full %>% filter(date >= as.Date('1980-01-01') & date <= as.Date('2023-10-01')) 
+
+gdp_test <- gdp_full %>% filter(date >= as.Date('2024-01-01')) 
+
+#  # # Split into train and test set 
+pot_gdp_train <- pot_gdp_full %>% filter(date >= as.Date('1980-01-01') & date <= as.Date('2023-10-01'))
+
+pot_gdp_test <- pot_gdp_full %>% filter(date >= as.Date('2024-01-01'))
+```
+
+## Task 3: Stationarity Testing & Structural Breaks
+
+### 3.1 Stationarity Testing
+
+```{r include=FALSE}
+# install.packages("aTSA")
+library(aTSA)
+library(tsibble)
+```
+
+```{r}
+
+infl_data <- gdp_full %>%
+  select(date, GDPC1) %>%
+  left_join(select(pcepi_full, date, pcepi=value, pct_chg_pce),
+            by='date') %>%
+  left_join(select(pot_gdp_full, date, GDPPOT), by='date') %>%
+  left_join(select(output_gap, date, output_gap=value), by='date')
+
+infl_long <- infl_data %>%
+  pivot_longer(
+    cols = -date,
+    names_to = "indicator",
+    values_to = "value"
+  ) %>% 
+  mutate(
+    date = yearmonth(date)
+  )
+
+infl_tsbl_long <- as_tsibble(infl_long, key=indicator, index=date) %>% 
+  arrange(date)
+infl_tsbl_wide <- as_tsibble(infl_data, index=date)
+```
+
+```{r}
+adf.test(infl_tsbl_wide$GDPC1)
+adf.test(infl_tsbl_wide$pcepi)
+adf.test(infl_tsbl_wide$pct_chg_pce)
+adf.test(infl_tsbl_wide$GDPPOT)
+adf.test(infl_tsbl_wide$output_gap)
+```
+
+```{r}
+ggplot(infl_tsbl_long, aes(date, value)) +
+  geom_line() +
+  facet_wrap(~indicator, scales = "free_y")
+```
