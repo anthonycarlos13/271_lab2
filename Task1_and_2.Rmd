@@ -473,3 +473,23 @@ pcepi_full %>%
 
 # pot_gdp_test <- pot_gdp_full %>% filter(date >= as.Date('2024-01-01'))
 ```
+
+# Task 4
+
+```{r}
+infl_data <- ffer_full %>% 
+  select(date, value) %>% 
+  rename(FEDFUNDS = value) %>%
+  left_join(pcepi_full, by = "date") %>%
+  select(date, FEDFUNDS, value, pct_chg_pce) %>%
+  rename(PCEPI = value) %>%
+  left_join(gdp_full, by = "date") %>%
+  select(date, FEDFUNDS, PCEPI, pct_chg_pce, value) %>%
+  rename(GDPC1 = value) %>%
+  left_join(pot_gdp_full, by = "date") %>%
+  select(date, FEDFUNDS, PCEPI, pct_chg_pce, GDPC1, value) %>%
+  rename(GDPPOT = value) %>%
+  mutate(output_gap = 100 * (GDPC1 - GDPPOT) / GDPPOT)
+```
+
+
