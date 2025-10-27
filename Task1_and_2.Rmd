@@ -1,0 +1,475 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r imports}
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+#install.packages("fredr")
+library(fredr)
+#install.packages("DescTools")
+library(DescTools)
+#install.packages("pracma")
+library(pracma)
+#install.packages("seastests")
+library(seastests)
+#install.packages(c("seasonal", "x13binary"))
+library(seasonal)
+```
+
+# Task 1
+
+[Notes]{.underline}
+
+Q1: 01-01, Q2: 04-01, Q3: 07-01, Q4: 10-01
+
+```{r Obtain Data (Quarterly)}
+api_key <- '3949fd9fcfaa43711339ce7b8a243180'
+
+fredr_set_key(api_key)
+
+
+# Federal Funds Effective Rate (FFER)
+ffer_full <- fredr(
+  series_id = "FEDFUNDS",
+  frequency = "q",              # quarterly
+  aggregation_method = "avg",
+  observation_start = as.Date("1980-01-01")
+)
+
+head(ffer_full)
+
+
+
+# Personal Consumption Expenditures Index (PCEPI) - Inflation measure
+pcepi_full <- fredr(
+  series_id = "PCEPI",
+  frequency = "q",
+  aggregation_method = "avg",
+  observation_start = as.Date("1980-01-01")
+)
+
+head(pcepi_full)
+
+
+
+# Real GDP
+gdp_full <- fredr(
+  series_id = "GDPC1",
+  frequency = "q",
+  aggregation_method = "avg",
+  observation_start = as.Date("1980-01-01")
+)
+
+head(gdp_full)
+
+
+# Potential Real GDP
+pot_gdp_full <- fredr(
+  series_id = "GDPPOT",
+  frequency = "q",
+  aggregation_method = "avg",
+  observation_start = as.Date("1980-01-01")
+)
+
+head(pot_gdp_full)
+
+
+```
+
+```{r Construct Variables}
+# Add pct_chg_pce col to PCE series
+t_val <- pcepi_full$value
+t_minus_one_val <- lag(pcepi_full$value, 1)
+pcepi_full$pct_chg_pce <- (t_val - t_minus_one_val) / t_minus_one_val
+
+
+gdp_merged <- inner_join(gdp_full, pot_gdp_full, by='date')
+
+# Add Output Gap col to GDP series
+gdp_merged$output_gap <- (gdp_merged$value.x - gdp_merged$value.y) * 100 / gdp_merged$value.y
+
+gdp_merged$series_id <- 'OUTPUTGAP'
+gdp_merged <- gdp_merged %>% rename(realtime_start = realtime_start.x, realtime_end = realtime_end.x, value=output_gap)
+
+output_gap <- gdp_merged %>% select(date, series_id, value, realtime_start, realtime_end)
+```
+
+```{r FFER Plot + Summary Statistics}
+
+ffer_full %>% 
+  ggplot(aes(x = date, y = value)) + 
+  geom_line() + 
+  labs(title = "Federal Funds Effective Rate (FFER)",
+       x = "date",
+       y = 'FFER')
+
+ffer_full %>%
+  summarize(
+    mean = mean(value, na.rm = TRUE),
+    var_value  = var(value, na.rm = TRUE),
+    sd_value   = sd(value, na.rm = TRUE),
+    n_obs      = n()
+  )
+
+```
+
+\<Comments\>
+
+```{r PCEPI Plot + Summary Statistics}
+pcepi_full %>% 
+  ggplot(aes(x = date, y = value)) + 
+  geom_line() + 
+  labs(title = "Personal Consumption Expenditures Index (PCEPI)",
+       x = "date",
+       y = 'PCEPI')
+
+pcepi_full %>%
+  summarize(
+    mean = mean(value, na.rm = TRUE),
+    var_value  = var(value, na.rm = TRUE),
+    sd_value   = sd(value, na.rm = TRUE),
+    n_obs      = n()
+  )
+
+pcepi_full %>% 
+  ggplot(aes(x = date, y = pct_chg_pce)) + 
+  geom_line() + 
+  labs(title = "Pct Change PCE",
+       x = "date",
+       y = 'Pct Change PCE')
+```
+
+\<Comments\>
+
+```{r GDP Plot + Summary Statistics}
+# Do regular GDP, POT GDP, and output gap
+
+gdp_full %>% 
+  ggplot(aes(x = date, y = value)) + 
+  geom_line() + 
+  labs(title = "Real GDP ",
+       x = "date",
+       y = 'GDP')
+
+gdp_full %>%
+  summarize(
+    mean = mean(value, na.rm = TRUE),
+    var_value  = var(value, na.rm = TRUE),
+    sd_value   = sd(value, na.rm = TRUE),
+    n_obs      = n()
+  )
+
+pot_gdp_full %>% 
+  ggplot(aes(x = date, y = value)) + 
+  geom_line() + 
+  labs(title = "Potential Real GDP ",
+       x = "date",
+       y = 'GDPPOT')
+
+pot_gdp_full %>%
+  summarize(
+    mean = mean(value, na.rm = TRUE),
+    var_value  = var(value, na.rm = TRUE),
+    sd_value   = sd(value, na.rm = TRUE),
+    n_obs      = n()
+  )
+
+output_gap %>% 
+  ggplot(aes(x = date, y = value)) + 
+  geom_line() + 
+  labs(title = "Output gap",
+       x = "date",
+       y = 'Output gap')
+```
+
+\<Comments\>
+
+# Task 2
+
+**2.1: Frequency Alignment (Resampling)**
+
+Based on the format of the API call to FRED, data is received at a quarterly cadence, with an average over all months in the quarter calculated and returned in the dataframe. No resampling was done.
+
+```{r Ensure same quarterly date index for all series}
+
+
+ensure_same_dates <- ffer_full %>% 
+  full_join(gdp_full, by='date') %>%
+  full_join(pcepi_full, by='date') %>% 
+  full_join(pot_gdp_full, by='date') %>%
+  full_join(output_gap, by='date')
+
+# Filter all to 2025-04-01 after visual examination of the data
+ffer_full <- ffer_full %>% filter(date <= as.Date('2025-04-01'))
+pcepi_full <- pcepi_full %>% filter(date <= as.Date('2025-04-01'))
+pot_gdp_full <- pot_gdp_full %>% filter(date <= as.Date('2025-04-01'))
+output_gap <- output_gap %>% filter(date <= as.Date('2025-04-01'))
+
+```
+
+**2.2: Outlier Detection & Treatment**
+
+[Method: Hampel filter]{.underline}
+
+To detect outliers, we've chosen to use the Hampel filter. We prefer this method because based on a visual examination of FFER, PECPI, and GDP data, scores appear to be mostly following either an upward trend or a fluctuating downward trend, with few outliers. The outliers that do appear (i.e. in Real GDP around 2020) are within the data (as opposed to on the upper and lower ends of the data). Thus, this would not be caught by winsorization. The rolling window calculations from a Hampel filter (relying on deviations from a median) would catch these outliers and smooth out the data. Z-scores, as well, is best suited to normally distributed data, which we don't have.
+
+[Outlier Detection]{.underline}
+
+We utilize a Hampel filter for the FFER, PECPI, GDP, GDPPOT, and output gap timeseries. A window size of \_\_\_ appeared to smooth out outliers best upon a visual examination of the corrected timeseries data
+
+```{r Apply Hampel filters}
+
+ffer_full$hampel_val <- hampel(ffer_full$value, k = 5)[[1]]
+
+ffer_full %>%
+  ggplot(aes(x = date)) + 
+  geom_line(aes(y = hampel_val, color = "Hampel")) +
+  geom_line(aes(y = value, color = "Original")) +
+  labs(title = "Federal Funds Effective Rate (FFER)",
+       x = "Date",
+       y = "Value") +
+  scale_color_manual(values = c("Hampel" = "blue", "Original" = "red"),
+                     name = "Legend")
+
+
+```
+
+```{r}
+
+pcepi_full$hampel_val <- hampel(pcepi_full$value, k = 5, )[[1]]
+
+pcepi_full %>%
+  ggplot(aes(x = date)) + 
+  geom_line(aes(y = hampel_val, color = "Hampel")) +
+  geom_line(aes(y = value, color = "Original")) +
+  labs(title = "PCEPI",
+       x = "Date",
+       y = "Value") +
+  scale_color_manual(values = c("Hampel" = "blue", "Original" = "red"),
+                     name = "Legend")
+```
+
+```{r}
+gdp_full$hampel_val <- hampel(gdp_full$value, k = 5, )[[1]]
+
+gdp_full %>%
+  ggplot(aes(x = date)) + 
+  geom_line(aes(y = hampel_val, color = "Hampel")) +
+  geom_line(aes(y = value, color = "Original")) +
+  labs(title = "GDP",
+       x = "Date",
+       y = "Value") +
+  scale_color_manual(values = c("Hampel" = "blue", "Original" = "red"),
+                     name = "Legend")
+```
+
+```{r}
+pot_gdp_full$hampel_val <- hampel(pot_gdp_full$value, k = 5, )[[1]]
+
+pot_gdp_full %>%
+  ggplot(aes(x = date)) + 
+  geom_line(aes(y = hampel_val, color = "Hampel")) +
+  geom_line(aes(y = value, color = "Original")) +
+  labs(title = "GDPPOT",
+       x = "Date",
+       y = "Value") +
+  scale_color_manual(values = c("Hampel" = "blue", "Original" = "red"),
+                     name = "Legend")
+```
+
+```{r}
+output_gap$value <- (gdp_full$hampel_val - pot_gdp_full$hampel_val) * 100 / pot_gdp_full$hampel_val
+
+```
+
+**2.3: Seasonal Adjustment**
+
+[Detection]{.underline}
+
+```{r FFER Seasonal Plots + QS Test}
+
+ffer_full <- ffer_full %>% mutate(q = quarter(date))
+
+
+ffer_full$q_factor <- factor(ffer_full$q, levels = c("1", "2", "3", "4"))
+
+ggplot(ffer_full, aes(x = q_factor, y = value)) +
+  geom_boxplot(fill = "skyblue", color = "black") +
+  labs(title = "Distribution of Values by Quarter",
+       x = "Quarter",
+       y = "Value") +
+  theme_minimal()
+
+ffer_full %>% filter(q == 1) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "FFER Q1", x = "Date", y = "Value")
+
+ffer_full %>% filter(q == 2) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "FFER Q2", x = "Date", y = "Value")
+
+ffer_full %>% filter(q == 3) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "FFER Q3", x = "Date", y = "Value")
+
+ffer_full %>% filter(q == 4) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "FFER Q4", x = "Date", y = "Value")
+
+start_year <- 1980
+start_quarter <- 1
+
+ffer_ts <- ts(ffer_full$hampel_val, start = c(start_year, start_quarter), frequency=4)
+
+qs(ffer_ts)
+```
+
+According to our QS test, no evidence for seasonality in the FFER data exists
+
+```{r PCEPI Seasonal Plots + QS Test}
+pcepi_full <- pcepi_full %>% mutate(q = quarter(date))
+
+pcepi_full$q_factor <- factor(pcepi_full$q, levels = c("1", "2", "3", "4"))
+
+ggplot(pcepi_full, aes(x = q_factor, y = value)) +
+  geom_boxplot(fill = "skyblue", color = "black") +
+  labs(title = "Distribution of Values by Quarter",
+       x = "Quarter",
+       y = "Value") +
+  theme_minimal()
+
+pcepi_full %>% filter(q == 1) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "PCEPI Q1", x = "Date", y = "Value")
+
+pcepi_full %>% filter(q == 2) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "PCEPI Q2", x = "Date", y = "Value")
+
+pcepi_full %>% filter(q == 3) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "PCEPI Q3", x = "Date", y = "Value")
+
+pcepi_full %>% filter(q == 4) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "PCEPI Q4", x = "Date", y = "Value")
+
+start_year <- 1980
+start_quarter <- 1
+
+pcepi_ts <- ts(pcepi_full$hampel_val, start = c(start_year, start_quarter), frequency=4)
+
+qs(pcepi_ts)
+```
+
+According to our QS test, evidence for seasonality in the PCEPI data exists.
+
+```{r GDP Seasonal Plots + QS Test}
+gdp_full <- gdp_full %>% mutate(q = quarter(date))
+
+gdp_full$q_factor <- factor(gdp_full$q, levels = c("1", "2", "3", "4"))
+
+ggplot(gdp_full, aes(x = q_factor, y = value)) +
+  geom_boxplot(fill = "skyblue", color = "black") +
+  labs(title = "Distribution of Values by Quarter",
+       x = "Quarter",
+       y = "Value") +
+  theme_minimal()
+
+gdp_full %>% filter(q == 1) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "GDP Q1", x = "Date", y = "Value")
+
+gdp_full %>% filter(q == 2) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "GDP Q2", x = "Date", y = "Value")
+
+gdp_full %>% filter(q == 3) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "GDP Q3", x = "Date", y = "Value")
+
+gdp_full %>% filter(q == 4) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "GDP Q4", x = "Date", y = "Value")
+
+start_year <- 1980
+start_quarter <- 1
+
+gdp_full_ts <- ts(gdp_full$hampel_val, start = c(start_year, start_quarter), frequency=4)
+
+qs(gdp_full_ts)
+```
+
+According to our QS test, no evidence for seasonality in the GDP data exists
+
+```{r GDPPOT Seasonal Plots + QS Test}
+pot_gdp_full <- pot_gdp_full %>% mutate(q = quarter(date))
+
+pot_gdp_full$q_factor <- factor(pot_gdp_full$q, levels = c("1", "2", "3", "4"))
+
+ggplot(pot_gdp_full, aes(x = q_factor, y = value)) +
+  geom_boxplot(fill = "skyblue", color = "black") +
+  labs(title = "Distribution of Values by Quarter",
+       x = "Quarter",
+       y = "Value") +
+  theme_minimal()
+
+pot_gdp_full %>% filter(q == 1) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "GDPPOT Q1", x = "Date", y = "Value")
+
+pot_gdp_full %>% filter(q == 2) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "GDPPOT Q2", x = "Date", y = "Value")
+
+pot_gdp_full %>% filter(q == 3) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "GDPPOT Q3", x = "Date", y = "Value")
+
+pot_gdp_full %>% filter(q == 4) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "GDPPOT Q4", x = "Date", y = "Value")
+
+start_year <- 1980
+start_quarter <- 1
+
+pot_gdp_full_ts <- ts(pot_gdp_full$hampel_val, start = c(start_year, start_quarter), frequency=4)
+
+qs(pot_gdp_full_ts)
+```
+
+According to our QS test, evidence for seasonality in the GDPPOT data exists
+
+[Seasonal Adjustment via]{.underline} **X-13ARIMA-SEATS**
+
+\<Justify method\>
+
+```{r}
+
+pcepi_fit <- seas(pcepi_ts)
+
+pcepi_full$s_adj_val <- final(pcepi_fit)
+
+pot_gdp_fit <- seas(pot_gdp_full_ts)
+
+pot_gdp_full$s_adj_val <- final(pot_gdp_fit)
+
+
+pot_gdp_full %>%
+  ggplot(aes(x = date)) + 
+  geom_line(aes(y = s_adj_val, color = "Seasonally Adjusted")) +
+  geom_line(aes(y = value, color = "Original")) +
+  labs(title = "GDPPOT",
+       x = "Date",
+       y = "Value") +
+  scale_color_manual(values = c("Seasonally Adjusted" = "blue", "Original" = "red"),
+                     name = "Legend")
+
+pcepi_full %>%
+  ggplot(aes(x = date)) + 
+  geom_line(aes(y = s_adj_val, color = "Seasonally Adjusted")) +
+  geom_line(aes(y = value, color = "Original")) +
+  labs(title = "PCEPI",
+       x = "Date",
+       y = "Value") +
+  scale_color_manual(values = c("Seasonally Adjusted" = "blue", "Original" = "red"),
+                     name = "Legend")
+```
+
+\<Show before vs. After comparison\>
+
+```{r}
+# # Split into train and test set 
+# ffer_train <- ffer_full %>% filter(date >= as.Date('1980-01-01') & date <= as.Date('2023-10-01')) 
+
+# ffer_test <- ffer_full %>% filter(date >= as.Date('2024-01-01')) 
+
+#  # # Split into train and test set 
+
+# pcepi_train <- pcepi_full %>% filter(date >= as.Date('1980-01-01') & date <= as.Date('2023-10-01')) 
+
+# pcepi_test <- pcepi_full %>% filter(date >= as.Date('2024-01-01')) 
+
+#  # # Split into train and test set 
+
+# gdp_train <- gdp_full %>% filter(date >= as.Date('1980-01-01') & date <= as.Date('2023-10-01')) 
+
+# gdp_test <- gdp_full %>% filter(date >= as.Date('2024-01-01')) 
+
+#  # # Split into train and test set 
+# pot_gdp_train <- pot_gdp_full %>% filter(date >= as.Date('1980-01-01') & date <= as.Date('2023-10-01')) 
+
+# pot_gdp_test <- pot_gdp_full %>% filter(date >= as.Date('2024-01-01'))
+```
