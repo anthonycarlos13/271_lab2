@@ -1,6 +1,8 @@
 ---
 title: "R Notebook"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
 
 ```{r imports}
@@ -477,19 +479,51 @@ pcepi_full %>%
 # Task 4
 
 ```{r}
-infl_data <- ffer_full %>% 
-  select(date, value) %>% 
-  rename(FEDFUNDS = value) %>%
+library(tsibble)
+
+infl_data_tsbl <- ffer_full %>% 
+  select(date, hampel_val) %>% 
+  rename(FEDFUNDS_hampel = hampel_val) %>%
   left_join(pcepi_full, by = "date") %>%
-  select(date, FEDFUNDS, value, pct_chg_pce) %>%
-  rename(PCEPI = value) %>%
+  select(date, FEDFUNDS_hampel, s_adj_val, pct_chg_pce) %>%
+  rename(PCEPI_s_adj = s_adj_val) %>%
   left_join(gdp_full, by = "date") %>%
-  select(date, FEDFUNDS, PCEPI, pct_chg_pce, value) %>%
-  rename(GDPC1 = value) %>%
+  select(date, FEDFUNDS_hampel, PCEPI_s_adj, pct_chg_pce, hampel_val) %>%
+  rename(GDPC1_hampel = hampel_val) %>%
   left_join(pot_gdp_full, by = "date") %>%
-  select(date, FEDFUNDS, PCEPI, pct_chg_pce, GDPC1, value) %>%
-  rename(GDPPOT = value) %>%
-  mutate(output_gap = 100 * (GDPC1 - GDPPOT) / GDPPOT)
+  select(date, FEDFUNDS_hampel, PCEPI_s_adj, pct_chg_pce, GDPC1_hampel, s_adj_val) %>%
+  rename(GDPPOT_s_adj = s_adj_val) %>%
+  mutate(
+    output_gap = 100 * (GDPC1_hampel - GDPPOT_s_adj) / GDPPOT_s_adj,
+    pct_chg_pce_s_adj = (PCEPI_s_adj / lag(PCEPI_s_adj) - 1),
+    date = yearquarter(date)
+  ) %>%
+  as_tsibble(index = date)
+
+infl_data_tsbl_train <- infl_data_tsbl %>% filter(date <= yearquarter("2022 Q4"))
+infl_data_tsbl_test <- infl_data_tsbl %>% filter(date > yearquarter("2022 Q4"))
 ```
+
+```{r}
+#all(pot_gdp_full$value == pot_gdp_full$hampel_val)
+
+#all(pot_gdp_full$value == pot_gdp_full$s_adj_val)
+
+#all(infl_data$pct_chg_pce == infl_data$pct_chg_pce_s_adj)
+```
+
+```{r}
+taylor_mod <- lm(FEDFUNDS_hampel ~ pct_chg_pce_s_adj + output_gap, data = infl_data_tsbl_train)
+summary(taylor_mod)
+```
+
+```{r}
+library(tseries)
+
+taylor_resid <- resid(taylor_mod)
+adf.test(taylor_resid)
+```
+
+Since the p value is 0.01024 and less than 0.05, we reject the null hypothesis that the series has a unit root. This means that the residuals are stationary and there is a  long-run equilibrium relationship.
 
 
