@@ -496,6 +496,7 @@ infl_data_tsbl <- ffer_full %>%
   mutate(
     output_gap = 100 * (GDPC1_hampel - GDPPOT_s_adj) / GDPPOT_s_adj,
     pct_chg_pce_s_adj = (PCEPI_s_adj / lag(PCEPI_s_adj) - 1),
+    inflation_gap = pct_chg_pce_s_adj - 0.02,
     date = yearquarter(date)
   ) %>%
   as_tsibble(index = date)
@@ -513,7 +514,7 @@ infl_data_tsbl_test <- infl_data_tsbl %>% filter(date > yearquarter("2022 Q4"))
 ```
 
 ```{r}
-taylor_mod <- lm(FEDFUNDS_hampel ~ pct_chg_pce_s_adj + output_gap, data = infl_data_tsbl_train)
+taylor_mod <- lm(FEDFUNDS_hampel ~ inflation_gap + output_gap, data = infl_data_tsbl_train)
 summary(taylor_mod)
 ```
 
