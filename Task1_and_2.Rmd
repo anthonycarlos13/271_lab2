@@ -319,7 +319,7 @@ start_quarter <- 1
 
 ffer_ts <- ts(ffer_full$hampel_val, start = c(start_year, start_quarter), frequency=4)
 
-qs(ffer_ts)
+seastests::qs(ffer_ts)
 ```
 
 According to our QS test, no evidence for seasonality in the FFER data exists
@@ -349,7 +349,7 @@ start_quarter <- 1
 
 pcepi_ts <- ts(pcepi_full$hampel_val, start = c(start_year, start_quarter), frequency=4)
 
-qs(pcepi_ts)
+seastests::qs(pcepi_ts)
 ```
 
 According to our QS test, evidence for seasonality in the PCEPI data exists.
@@ -379,7 +379,7 @@ start_quarter <- 1
 
 gdp_full_ts <- ts(gdp_full$hampel_val, start = c(start_year, start_quarter), frequency=4)
 
-qs(gdp_full_ts)
+seastests::qs(gdp_full_ts)
 ```
 
 According to our QS test, no evidence for seasonality in the GDP data exists
@@ -409,7 +409,7 @@ start_quarter <- 1
 
 pot_gdp_full_ts <- ts(pot_gdp_full$hampel_val, start = c(start_year, start_quarter), frequency=4)
 
-qs(pot_gdp_full_ts)
+seastests::qs(pot_gdp_full_ts)
 ```
 
 According to our QS test, evidence for seasonality in the GDPPOT data exists
