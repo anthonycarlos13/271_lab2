@@ -1,0 +1,725 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r imports}
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+#install.packages("fredr")
+library(fredr)
+#install.packages("DescTools")
+library(DescTools)
+# install.packages("pracma")
+library(pracma)
+# install.packages("seastests")
+library(seastests)
+# install.packages(c("seasonal", "x13binary"))
+library(seasonal)
+library(tseries)
+library(forecast)
+
+library(aTSA)
+library(tsibble)
+library(fable)
+# install.packages("uroot")
+library(urca)
+library(feasts)
+```
+
+# Task 1
+
+[Notes]{.underline}
+
+Q1: 01-01, Q2: 04-01, Q3: 07-01, Q4: 10-01
+
+```{r Obtain Data (Quarterly)}
+api_key <- '3949fd9fcfaa43711339ce7b8a243180'
+
+fredr_set_key(api_key)
+
+
+# Federal Funds Effective Rate (FFER)
+ffer_full <- fredr(
+  series_id = "FEDFUNDS",
+  frequency = "q",              # quarterly
+  aggregation_method = "avg",
+  observation_start = as.Date("1980-01-01")
+)
+
+head(ffer_full)
+
+
+
+# Personal Consumption Expenditures Index (PCEPI) - Inflation measure
+pcepi_full <- fredr(
+  series_id = "PCEPI",
+  frequency = "q",
+  aggregation_method = "avg",
+  observation_start = as.Date("1980-01-01")
+)
+
+head(pcepi_full)
+
+
+
+# Real GDP
+gdp_full <- fredr(
+  series_id = "GDPC1",
+  frequency = "q",
+  aggregation_method = "avg",
+  observation_start = as.Date("1980-01-01")
+)
+
+head(gdp_full)
+
+
+# Potential Real GDP
+pot_gdp_full <- fredr(
+  series_id = "GDPPOT",
+  frequency = "q",
+  aggregation_method = "avg",
+  observation_start = as.Date("1980-01-01")
+)
+
+head(pot_gdp_full)
+
+
+```
+
+```{r Construct Variables}
+# Add pct_chg_pce col to PCE series
+t_val <- pcepi_full$value
+t_minus_one_val <- lag(pcepi_full$value, 1)
+pcepi_full$pct_chg_pce <- (t_val - t_minus_one_val) / t_minus_one_val
+
+
+gdp_merged <- inner_join(gdp_full, pot_gdp_full, by='date')
+
+# Add Output Gap col to GDP series
+gdp_merged$output_gap <- (gdp_merged$value.x - gdp_merged$value.y) * 100 / gdp_merged$value.y
+
+gdp_merged$series_id <- 'OUTPUTGAP'
+gdp_merged <- gdp_merged %>% rename(realtime_start = realtime_start.x, realtime_end = realtime_end.x, value=output_gap)
+
+output_gap <- gdp_merged %>% select(date, series_id, value, realtime_start, realtime_end)
+```
+
+```{r FFER Plot + Summary Statistics}
+
+ffer_full %>% 
+  ggplot(aes(x = date, y = value)) + 
+  geom_line() + 
+  labs(title = "Federal Funds Effective Rate (FFER)",
+       x = "date",
+       y = 'FFER')
+
+ffer_full %>%
+  summarize(
+    mean = mean(value, na.rm = TRUE),
+    var_value  = var(value, na.rm = TRUE),
+    sd_value   = sd(value, na.rm = TRUE),
+    n_obs      = n()
+  )
+
+```
+
+\<Comments\>
+
+```{r PCEPI Plot + Summary Statistics}
+pcepi_full %>% 
+  ggplot(aes(x = date, y = value)) + 
+  geom_line() + 
+  labs(title = "Personal Consumption Expenditures Index (PCEPI)",
+       x = "date",
+       y = 'PCEPI')
+
+pcepi_full %>%
+  summarize(
+    mean = mean(value, na.rm = TRUE),
+    var_value  = var(value, na.rm = TRUE),
+    sd_value   = sd(value, na.rm = TRUE),
+    n_obs      = n()
+  )
+
+pcepi_full %>% 
+  ggplot(aes(x = date, y = pct_chg_pce)) + 
+  geom_line() + 
+  labs(title = "Pct Change PCE",
+       x = "date",
+       y = 'Pct Change PCE')
+```
+
+\<Comments\>
+
+```{r GDP Plot + Summary Statistics}
+# Do regular GDP, POT GDP, and output gap
+
+gdp_full %>% 
+  ggplot(aes(x = date, y = value)) + 
+  geom_line() + 
+  labs(title = "Real GDP ",
+       x = "date",
+       y = 'GDP')
+
+gdp_full %>%
+  summarize(
+    mean = mean(value, na.rm = TRUE),
+    var_value  = var(value, na.rm = TRUE),
+    sd_value   = sd(value, na.rm = TRUE),
+    n_obs      = n()
+  )
+
+pot_gdp_full %>% 
+  ggplot(aes(x = date, y = value)) + 
+  geom_line() + 
+  labs(title = "Potential Real GDP ",
+       x = "date",
+       y = 'GDPPOT')
+
+pot_gdp_full %>%
+  summarize(
+    mean = mean(value, na.rm = TRUE),
+    var_value  = var(value, na.rm = TRUE),
+    sd_value   = sd(value, na.rm = TRUE),
+    n_obs      = n()
+  )
+
+output_gap %>% 
+  ggplot(aes(x = date, y = value)) + 
+  geom_line() + 
+  labs(title = "Output gap",
+       x = "date",
+       y = 'Output gap')
+```
+
+\<Comments\>
+
+# Task 2
+
+**2.1: Frequency Alignment (Resampling)**
+
+Based on the format of the API call to FRED, data is received at a quarterly cadence, with an average over all months in the quarter calculated and returned in the dataframe. No resampling was done.
+
+```{r Ensure same quarterly date index for all series}
+
+
+ensure_same_dates <- ffer_full %>% 
+  full_join(gdp_full, by='date') %>%
+  full_join(pcepi_full, by='date') %>% 
+  full_join(pot_gdp_full, by='date') %>%
+  full_join(output_gap, by='date')
+
+# Filter all to 2025-04-01 after visual examination of the data
+ffer_full <- ffer_full %>% filter(date <= as.Date('2025-04-01'))
+pcepi_full <- pcepi_full %>% filter(date <= as.Date('2025-04-01'))
+pot_gdp_full <- pot_gdp_full %>% filter(date <= as.Date('2025-04-01'))
+output_gap <- output_gap %>% filter(date <= as.Date('2025-04-01'))
+
+```
+
+**2.2: Outlier Detection & Treatment**
+
+[Method: Hampel filter]{.underline}
+
+To detect outliers, we've chosen to use the Hampel filter. We prefer this method because based on a visual examination of FFER, PECPI, and GDP data, scores appear to be mostly following either an upward trend or a fluctuating downward trend, with few outliers. The outliers that do appear (i.e. in Real GDP around 2020) are within the data (as opposed to on the upper and lower ends of the data). Thus, this would not be caught by winsorization. The rolling window calculations from a Hampel filter (relying on deviations from a median) would catch these outliers and smooth out the data. Z-scores, as well, is best suited to normally distributed data, which we don't have.
+
+[Outlier Detection]{.underline}
+
+We utilize a Hampel filter for the FFER, PECPI, GDP, GDPPOT, and output gap timeseries. A window size of \_\_\_ appeared to smooth out outliers best upon a visual examination of the corrected timeseries data
+
+```{r Apply Hampel filters}
+
+ffer_full$hampel_val <- hampel(ffer_full$value, k = 5)[[1]]
+
+ffer_full %>%
+  ggplot(aes(x = date)) + 
+  geom_line(aes(y = hampel_val, color = "Hampel")) +
+  geom_line(aes(y = value, color = "Original")) +
+  labs(title = "Federal Funds Effective Rate (FFER)",
+       x = "Date",
+       y = "Value") +
+  scale_color_manual(values = c("Hampel" = "blue", "Original" = "red"),
+                     name = "Legend")
+
+
+```
+
+```{r}
+
+pcepi_full$hampel_val <- hampel(pcepi_full$value, k = 5, )[[1]]
+
+pcepi_full %>%
+  ggplot(aes(x = date)) + 
+  geom_line(aes(y = hampel_val, color = "Hampel")) +
+  geom_line(aes(y = value, color = "Original")) +
+  labs(title = "PCEPI",
+       x = "Date",
+       y = "Value") +
+  scale_color_manual(values = c("Hampel" = "blue", "Original" = "red"),
+                     name = "Legend")
+```
+
+```{r}
+gdp_full$hampel_val <- hampel(gdp_full$value, k = 5, )[[1]]
+
+gdp_full %>%
+  ggplot(aes(x = date)) + 
+  geom_line(aes(y = hampel_val, color = "Hampel")) +
+  geom_line(aes(y = value, color = "Original")) +
+  labs(title = "GDP",
+       x = "Date",
+       y = "Value") +
+  scale_color_manual(values = c("Hampel" = "blue", "Original" = "red"),
+                     name = "Legend")
+```
+
+```{r}
+pot_gdp_full$hampel_val <- hampel(pot_gdp_full$value, k = 5, )[[1]]
+
+pot_gdp_full %>%
+  ggplot(aes(x = date)) + 
+  geom_line(aes(y = hampel_val, color = "Hampel")) +
+  geom_line(aes(y = value, color = "Original")) +
+  labs(title = "GDPPOT",
+       x = "Date",
+       y = "Value") +
+  scale_color_manual(values = c("Hampel" = "blue", "Original" = "red"),
+                     name = "Legend")
+```
+
+```{r}
+output_gap$value <- (gdp_full$hampel_val - pot_gdp_full$hampel_val) * 100 / pot_gdp_full$hampel_val
+
+```
+
+**2.3: Seasonal Adjustment**
+
+[Detection]{.underline}
+
+```{r FFER Seasonal Plots + QS Test}
+
+ffer_full <- ffer_full %>% mutate(q = quarter(date))
+
+
+ffer_full$q_factor <- factor(ffer_full$q, levels = c("1", "2", "3", "4"))
+
+ggplot(ffer_full, aes(x = q_factor, y = value)) +
+  geom_boxplot(fill = "skyblue", color = "black") +
+  labs(title = "Distribution of Values by Quarter",
+       x = "Quarter",
+       y = "Value") +
+  theme_minimal()
+
+ffer_full %>% filter(q == 1) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "FFER Q1", x = "Date", y = "Value")
+
+ffer_full %>% filter(q == 2) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "FFER Q2", x = "Date", y = "Value")
+
+ffer_full %>% filter(q == 3) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "FFER Q3", x = "Date", y = "Value")
+
+ffer_full %>% filter(q == 4) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "FFER Q4", x = "Date", y = "Value")
+
+start_year <- 1980
+start_quarter <- 1
+
+ffer_ts <- ts(ffer_full$hampel_val, start = c(start_year, start_quarter), frequency=4)
+
+seastests::qs(ffer_ts)
+```
+
+According to our QS test, no evidence for seasonality in the FFER data exists
+
+```{r PCEPI Seasonal Plots + QS Test}
+pcepi_full <- pcepi_full %>% mutate(q = quarter(date))
+
+pcepi_full$q_factor <- factor(pcepi_full$q, levels = c("1", "2", "3", "4"))
+
+ggplot(pcepi_full, aes(x = q_factor, y = value)) +
+  geom_boxplot(fill = "skyblue", color = "black") +
+  labs(title = "Distribution of Values by Quarter",
+       x = "Quarter",
+       y = "Value") +
+  theme_minimal()
+
+pcepi_full %>% filter(q == 1) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "PCEPI Q1", x = "Date", y = "Value")
+
+pcepi_full %>% filter(q == 2) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "PCEPI Q2", x = "Date", y = "Value")
+
+pcepi_full %>% filter(q == 3) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "PCEPI Q3", x = "Date", y = "Value")
+
+pcepi_full %>% filter(q == 4) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "PCEPI Q4", x = "Date", y = "Value")
+
+start_year <- 1980
+start_quarter <- 1
+
+pcepi_ts <- ts(pcepi_full$hampel_val, start = c(start_year, start_quarter), frequency=4)
+
+seastests::qs(pcepi_ts)
+```
+
+According to our QS test, evidence for seasonality in the PCEPI data exists.
+
+```{r GDP Seasonal Plots + QS Test}
+gdp_full <- gdp_full %>% mutate(q = quarter(date))
+
+gdp_full$q_factor <- factor(gdp_full$q, levels = c("1", "2", "3", "4"))
+
+ggplot(gdp_full, aes(x = q_factor, y = value)) +
+  geom_boxplot(fill = "skyblue", color = "black") +
+  labs(title = "Distribution of Values by Quarter",
+       x = "Quarter",
+       y = "Value") +
+  theme_minimal()
+
+gdp_full %>% filter(q == 1) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "GDP Q1", x = "Date", y = "Value")
+
+gdp_full %>% filter(q == 2) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "GDP Q2", x = "Date", y = "Value")
+
+gdp_full %>% filter(q == 3) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "GDP Q3", x = "Date", y = "Value")
+
+gdp_full %>% filter(q == 4) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "GDP Q4", x = "Date", y = "Value")
+
+start_year <- 1980
+start_quarter <- 1
+
+gdp_full_ts <- ts(gdp_full$hampel_val, start = c(start_year, start_quarter), frequency=4)
+
+seastests::qs(gdp_full_ts)
+```
+
+According to our QS test, no evidence for seasonality in the GDP data exists
+
+```{r GDPPOT Seasonal Plots + QS Test}
+pot_gdp_full <- pot_gdp_full %>% mutate(q = quarter(date))
+
+pot_gdp_full$q_factor <- factor(pot_gdp_full$q, levels = c("1", "2", "3", "4"))
+
+ggplot(pot_gdp_full, aes(x = q_factor, y = value)) +
+  geom_boxplot(fill = "skyblue", color = "black") +
+  labs(title = "Distribution of Values by Quarter",
+       x = "Quarter",
+       y = "Value") +
+  theme_minimal()
+
+pot_gdp_full %>% filter(q == 1) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "GDPPOT Q1", x = "Date", y = "Value")
+
+pot_gdp_full %>% filter(q == 2) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "GDPPOT Q2", x = "Date", y = "Value")
+
+pot_gdp_full %>% filter(q == 3) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "GDPPOT Q3", x = "Date", y = "Value")
+
+pot_gdp_full %>% filter(q == 4) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "GDPPOT Q4", x = "Date", y = "Value")
+
+start_year <- 1980
+start_quarter <- 1
+
+pot_gdp_full_ts <- ts(pot_gdp_full$hampel_val, start = c(start_year, start_quarter), frequency=4)
+
+seastests::qs(pot_gdp_full_ts)
+```
+
+According to our QS test, evidence for seasonality in the GDPPOT data exists
+
+[Seasonal Adjustment via]{.underline} **X-13ARIMA-SEATS**
+
+\<Justify method\>
+
+```{r}
+
+pcepi_fit <- seas(pcepi_ts)
+
+pcepi_full$s_adj_val <- final(pcepi_fit)
+
+pot_gdp_fit <- seas(pot_gdp_full_ts)
+
+pot_gdp_full$s_adj_val <- final(pot_gdp_fit)
+
+
+pot_gdp_full %>%
+  ggplot(aes(x = date)) + 
+  geom_line(aes(y = s_adj_val, color = "Seasonally Adjusted")) +
+  geom_line(aes(y = value, color = "Original")) +
+  labs(title = "GDPPOT",
+       x = "Date",
+       y = "Value") +
+  scale_color_manual(values = c("Seasonally Adjusted" = "blue", "Original" = "red"),
+                     name = "Legend")
+
+pcepi_full %>%
+  ggplot(aes(x = date)) + 
+  geom_line(aes(y = s_adj_val, color = "Seasonally Adjusted")) +
+  geom_line(aes(y = value, color = "Original")) +
+  labs(title = "PCEPI",
+       x = "Date",
+       y = "Value") +
+  scale_color_manual(values = c("Seasonally Adjusted" = "blue", "Original" = "red"),
+                     name = "Legend")
+```
+
+\<Show before vs. After comparison\>
+
+```{r}
+# # Split into train and test set 
+# ffer_train <- ffer_full %>% filter(date >= as.Date('1980-01-01') & date <= as.Date('2023-10-01')) 
+
+# ffer_test <- ffer_full %>% filter(date >= as.Date('2024-01-01')) 
+
+#  # # Split into train and test set 
+
+# pcepi_train <- pcepi_full %>% filter(date >= as.Date('1980-01-01') & date <= as.Date('2023-10-01')) 
+
+# pcepi_test <- pcepi_full %>% filter(date >= as.Date('2024-01-01')) 
+
+#  # # Split into train and test set 
+
+# gdp_train <- gdp_full %>% filter(date >= as.Date('1980-01-01') & date <= as.Date('2023-10-01')) 
+
+# gdp_test <- gdp_full %>% filter(date >= as.Date('2024-01-01')) 
+
+#  # # Split into train and test set 
+# pot_gdp_train <- pot_gdp_full %>% filter(date >= as.Date('1980-01-01') & date <= as.Date('2023-10-01')) 
+
+# pot_gdp_test <- pot_gdp_full %>% filter(date >= as.Date('2024-01-01'))
+```
+
+# Task 3
+
+```{r}
+infl_data_tsbl <- ffer_full %>% 
+  select(date, hampel_val) %>% 
+  rename(FEDFUNDS_hampel = hampel_val) %>%
+  left_join(pcepi_full, by = "date") %>%
+  select(date, FEDFUNDS_hampel, s_adj_val, pct_chg_pce) %>%
+  rename(PCEPI_s_adj = s_adj_val) %>%
+  left_join(gdp_full, by = "date") %>%
+  select(date, FEDFUNDS_hampel, PCEPI_s_adj, pct_chg_pce, hampel_val) %>%
+  rename(GDPC1_hampel = hampel_val) %>%
+  left_join(pot_gdp_full, by = "date") %>%
+  select(date, FEDFUNDS_hampel, PCEPI_s_adj, pct_chg_pce, GDPC1_hampel, s_adj_val) %>%
+  rename(GDPPOT_s_adj = s_adj_val) %>%
+  mutate(
+    output_gap = 100 * (GDPC1_hampel - GDPPOT_s_adj) / GDPPOT_s_adj,
+    pct_chg_pce_s_adj = (PCEPI_s_adj / lag(PCEPI_s_adj) - 1),
+    inflation_gap = pct_chg_pce_s_adj - 0.02,
+    date = yearquarter(date)
+  ) %>%
+  as_tsibble(index = date)
+
+infl_data_tsbl_train <- infl_data_tsbl %>% 
+  filter(date <= yearquarter("2022 Q4"))
+infl_data_tsbl_test <- infl_data_tsbl %>% 
+  filter(date > yearquarter("2022 Q4"))
+```
+
+```{r}
+vars <- names(select(infl_data_tsbl_train, where(is.numeric)))
+
+results <- data.frame(
+  variable     = vars,
+  stationary_3 = NA,
+  stationary_2 = NA
+)
+
+for (i in seq_along(vars)) {
+  x   <- infl_data_tsbl_train[[vars[i]]]
+  res <- aTSA::adf.test(x, output = FALSE)
+
+  # Evaluate if evidence of Trend and Drift
+  p3 <- min(res$type3[, "p.value"], na.rm = TRUE)
+  results$stationary_3[i] <- p3 < 0.05
+
+  # Evaluate for Drift only
+  p2 <- min(res$type2[, "p.value"], na.rm = TRUE)
+  results$stationary_2[i] <- p2 < 0.05
+}
+
+as_tibble(results)
+```
+
+### Discussion:
+
+Using the General to Specific approach, we first evaluate for drift and trend terms for each variable in the dataset. For this test, only the Seasonally Adjusted PCEPI and the GDPC with hampel filter variables fail to reject the null hypothesis of stationarity. From there, we evaluate all variable for drift only. This time, the seasonally adjusted GDPPOT variable also fails to reject the null, in addition to the aforementioned variables.
+
+These test results suggest that the PCEPI and GDPC variables should be differenced before before use in modeling, to avoid spurious regression. The GDPPOT variable is trend-stationary because it does not contain a unit-root but it does contain a deterministic trend. In order to capture the explanatory power of the variable, GDPPOT_s_adj should not be differenced.
+
+```{r}
+adf.test(infl_data_tsbl_train$d_PCEPI_s_adj)
+```
+
+```{r}
+adf.test(infl_data_tsbl_train$d_GDPC1_hampel)
+```
+
+### Discussion
+
+After differencing the two variables identified by the ADF test above, they no longer show trend or drift. Notably, there are some lags for both variables that result in a failure to reject the null hypothesis. Therefore care must be taken when determining which lags to use when modeling with these variables to ensure they remain stationary.
+
+```{r}
+za_results <- map_dfr(vars, function(v) {
+  x <- infl_data_tsbl_train[[v]]
+  test <- ur.za(x, model = "both")
+  result <- summary(test)
+  tibble(
+    variable = v,
+    model = test@model[1],
+    sig_thresh = result@cval[2],
+    test_res = result@teststat,
+    stry_w_brk = result@teststat < result@cval[2]
+  )
+})
+
+za_results
+```
+
+```{r}
+infl_data_tsbl_train <- infl_data_tsbl_train %>% 
+  mutate(
+    d_FEDFUNDS_hampel = difference(FEDFUNDS_hampel),
+    d_PCEPI_s_adj = difference(PCEPI_s_adj),
+    d_GDPC1_hampel = difference(GDPC1_hampel),
+    d_GDPPOT_s_adj = difference(GDPPOT_s_adj)
+  )
+```
+
+### Discussion:
+
+In comparison to the ADF test, the Zivot Andrews test identifies more variables that are not stationary when accounting for structural breaks in the data. The FEDFUNDS_hampel, PCEPI_s_adj, GDPC1_hampel, GDPPOT_s_adj and output_gap variables fail to reject the null hypothesis of stationarity with a structural break.
+
+This means that the additional variables identified over the ADF only appear non-stationary because of a structural break. Once that break is included, the variables are found to be non-stationary. They should be differenced to reduce issues with model inference due to non-stationary residuals or spurious regression.
+
+# Task 4
+
+```{r}
+taylor_mod <- infl_data_tsbl_train %>%
+  model(tlsm = TSLM(FEDFUNDS_hampel ~ inflation_gap + output_gap))
+report(taylor_mod)
+```
+
+```{r}
+taylor_mod %>%
+  gg_tsresiduals()
+```
+
+### Discussion:
+
+Previous analysis on the variables indicated that they should be differenced before use in regression. However doing so results in a different interpretation of the Taylor Rule. The non-stationary variables were used so that discussion could revolve around the models adherence to economic theory.
+
+With this model, the inflation gap estimate is significant with a value of 406.8. This variable is reported in hundredths, so the correct interpretation about a 4% increase for every 1% inflation point above the inflation target. This does match economic theory, in that the Fed Fund rate increases as inflation increases in an effort to "cool off" the economy. This estimate is slightly high in comparison to real targets of 2%. In general, this means that in this sample, the funds rate reacts much more strongly to inflation than what would be considered the "rule of thumb". This may be due to the several economic shocks that occurred through the training time periods.
+
+The Autocorrelation plots for this model shows that the residuals are significant across all lags. This shows that there is additional information that is not captured with the model, as the residuals are not white noise.
+
+```{r}
+accuracy(taylor_mod)$RMSE
+```
+
+```{r}
+taylor_fc <- forecast(taylor_mod, new_data = infl_data_tsbl_test)
+```
+
+```{r}
+accuracy(taylor_fc, infl_data_tsbl_test)$RMSE
+```
+
+```{r}
+autoplot(taylor_fc, infl_data_tsbl_train) +
+  labs(
+    title = "Taylor Rule: Fitted and Forecasted Fed Funds Rate",
+    x = "Date",
+    y = "Federal Funds Rate (%)"
+  ) +
+  theme_minimal()
+```
+
+### Discussion:
+
+The Root Mean Squared Error value for the training data is 3.29. For the test data, the value is 0.92. So for the training data, the model is generally within 3.3 percentage points of the actual data, a pretty large spread overall. However this tightens to within 1 percentage point for the test data.
+
+This difference may be attributed to the relative calm in the market during the test period compared to the training period. For example, the training period contains large abnormalities, like the Dot-Com bubble, housing crisis, and COVID, all within nearly 20 years of the end of the training data. The test data has no such unrest, and is therefore able to more "accurate" in describing the fed rate response to inflation. For these reasons, it is likely improper to suggest that this is an optimized model for future forecasting.
+
+# Task 5
+
+## 5.1: Cointegration Test (5 Points)
+
+```{r}
+## Tom Commented this code after creating the model in task 4
+# taylor_mod <- lm(FEDFUNDS_hampel ~ inflation_gap + output_gap, 
+#                  data = infl_data_tsbl_train)
+# summary(taylor_mod)
+```
+
+```{r}
+taylor_resid <- resid(taylor_mod)
+adf.test(taylor_resid)
+```
+
+Since the p value is 0.01024 and less than 0.05, we reject the null hypothesis that the series has a unit root. This means that the residuals are stationary and there is a long-run equilibrium relationship.
+
+## 5.2: Estimating the ECM via OLS (5 Points)
+
+```{r}
+# full residuals to add back to tsibble
+long_run_model <- lm(FEDFUNDS_hampel ~ inflation_gap + output_gap, 
+                     data = infl_data_tsbl)
+long_run_resid <- c(NA, resid(long_run_model))
+
+# add ECM variables
+infl_data_tsbl_ecm <-  infl_data_tsbl %>%
+  mutate(
+    d_it = FEDFUNDS_hampel - lag(FEDFUNDS_hampel),
+    d_infl_gap = inflation_gap - lag(inflation_gap),
+    d_output_gap = output_gap - lag(output_gap),
+    lag_resid = lag(long_run_resid)
+  )
+
+infl_data_tsbl_ecm_train <- infl_data_tsbl_ecm %>% 
+  filter(date <= yearquarter("2022 Q4"))
+infl_data_tsbl_ecm_test <- infl_data_tsbl_ecm %>% 
+  filter(date > yearquarter("2022 Q4"))
+```
+
+```{r}
+ecm_model <- lm(d_it ~ d_infl_gap + d_output_gap + lag_resid, 
+                data = infl_data_tsbl_ecm)
+summary(ecm_model)
+```
+
+## 5.3: Compare ECM Forecasts (5 Points)
+
+```{r}
+ecm_model_train <- lm(d_it ~ d_infl_gap + d_output_gap + lag_resid, 
+                data = infl_data_tsbl_ecm_train)
+summary(ecm_model_train)
+```
+
+```{r}
+# forecast d_it
+ecm_fc <- forecast(ecm_model_train, newdata = as.data.frame(infl_data_tsbl_ecm_test))
+```
+
+```{r}
+d_hat <- ecm_fc$mean
+
+# Convert to level forecasts
+i_hat <- numeric(length(d_hat))
+# Start with last value of train data and recursively add
+i_hat[1] <- tail(infl_data_tsbl_ecm_train$FEDFUNDS_hampel, 1) + d_hat[1] 
+for (t in 2:length(d_hat)) {
+  i_hat[t] <- i_hat[t - 1] + d_hat[t]
+}
+
+ecm_rmse <- sqrt(mean((infl_data_tsbl_ecm_test$FEDFUNDS_hampel - i_hat)^2, na.rm = TRUE))
+
+ecm_rmse
+```
+
+```{r}
+ols_fc <- forecast(taylor_mod, newdata = as.data.frame(infl_data_tsbl_test))
+ols_pred <- ols_fc$mean
+ols_rmse <- sqrt(mean((infl_data_tsbl_test$FEDFUNDS_hampel - ols_pred)^2, na.rm = TRUE))
+ols_rmse
+```
+
+The ECM model performs slightly worse with a higher RMSE.
