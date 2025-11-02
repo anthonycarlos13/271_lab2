@@ -24,13 +24,13 @@ library(seasonal)
 
 [Notes]{.underline}
 
-Q1: 01-01, Q2: 04-01, Q3: 07-01, Q4: 10-01
-
 ```{r Obtain Data (Quarterly)}
+
 api_key <- '3949fd9fcfaa43711339ce7b8a243180'
 
 fredr_set_key(api_key)
 
+# Q1: 01-01, Q2: 04-01, Q3: 07-01, Q4: 10-01
 
 # Federal Funds Effective Rate (FFER)
 ffer_full <- fredr(
@@ -117,7 +117,17 @@ ffer_full %>%
 
 ```
 
-\<Comments\>
+One may note a few key historical events that appear in the graph:
+
+-   A near-zero interest rate between 2008 and 2015. This rate was a result of the 2008 Grand Recession
+
+<!-- -->
+
+-   The 1980s had very high interest rates in order to curb high rates of inflation
+
+-   Rates were additionally cut in 2000 in response to the dot-com bubble
+
+-   In 2020, rates were cut to near-zero as a result of the pandemic
 
 ```{r PCEPI Plot + Summary Statistics}
 pcepi_full %>% 
@@ -143,7 +153,15 @@ pcepi_full %>%
        y = 'Pct Change PCE')
 ```
 
-\<Comments\>
+PCEPI (Inflation) shows events that are related to events that spurred the FFER changes we see in the above graph.
+
+-   
+
+-   High inflation characterized the early 1980s, as shown by the peak in the graph
+
+-   Very low inflation appears in 2008 during the 2008 financial crisis 
+
+-   Inflation hit local maxima around 2020 as a result of the pandemic
 
 ```{r GDP Plot + Summary Statistics}
 # Do regular GDP, POT GDP, and output gap
@@ -186,7 +204,13 @@ output_gap %>%
        y = 'Output gap')
 ```
 
-\<Comments\>
+GDP appears to steadily increase from 1980 to 2020, with a notable dip in 2020 due the COVID pandemic. The output gap timeseries is affected by similar events as FFER and PCEPI:
+
+-   A dip in the early 1980s is seen, which is at the same time as high inflation and spiked interest rates
+
+-   A major dip in 2008 exists, which is at the time of the 2008 financial crisis
+
+-   A sharp dip in 2020 is seen, corresponding to the time of the COVID pandemic
 
 # Task 2
 
@@ -219,7 +243,7 @@ To detect outliers, we've chosen to use the Hampel filter. We prefer this method
 
 [Outlier Detection]{.underline}
 
-We utilize a Hampel filter for the FFER, PECPI, GDP, GDPPOT, and output gap timeseries. A window size of \_\_\_ appeared to smooth out outliers best upon a visual examination of the corrected timeseries data
+We utilize a Hampel filter for the FFER, PECPI, GDP, GDPPOT, and output gap timeseries. A window size of 5 appeared to smooth out outliers best upon a visual examination of the corrected timeseries data.
 
 ```{r Apply Hampel filters}
 
@@ -239,7 +263,6 @@ ffer_full %>%
 ```
 
 ```{r}
-
 pcepi_full$hampel_val <- hampel(pcepi_full$value, k = 5, )[[1]]
 
 pcepi_full %>%
@@ -414,7 +437,9 @@ According to our QS test, evidence for seasonality in the GDPPOT data exists
 
 [Seasonal Adjustment via]{.underline} **X-13ARIMA-SEATS**
 
-\<Justify method\>
+This method is used because it allows for timeseries that can be decomposed additively or multiplicatively, allowing for maximum flexibility. The trend, seasonal component, and irregular component are all estimated and the algorithm uses centered moving averages to remove the seasonal component.
+
+Source: <https://en.wikipedia.org/wiki/X-13ARIMA-SEATS>
 
 ```{r}
 
@@ -447,8 +472,6 @@ pcepi_full %>%
   scale_color_manual(values = c("Seasonally Adjusted" = "blue", "Original" = "red"),
                      name = "Legend")
 ```
-
-\<Show before vs. After comparison\>
 
 ```{r}
 # # Split into train and test set 
