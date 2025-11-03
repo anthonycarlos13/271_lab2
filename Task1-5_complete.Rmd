@@ -1,11 +1,12 @@
 ---
-title: "R Notebook"
+title: "Lab 2"
 output:
+  pdf_document: default
   html_document:
     df_print: paged
 ---
 
-```{r imports}
+```{r imports, echo=FALSE, include=FALSE, warning=FALSE}
 library(tidyverse)
 library(dplyr)
 library(ggplot2)
@@ -31,17 +32,28 @@ library(urca)
 library(feasts)
 ```
 
-# Task 1
+# Task 1: Introduction
 
-[Notes]{.underline}
+Monetary policy plays a central role in stabilizing economic activity by influencing interest rates in response to inflationary and output fluctuations. One of the most influential formulations of this relationship is the **Taylor Rule**, which posits that the short-term nominal interest rate should adjust systematically to deviations of inflation from its target and output from potential. Conceptually, the Taylor Rule provides a quantitative guideline for how central banks such as the Federal Reserve set policy to balance price stability and economic growth.
 
-Q1: 01-01, Q2: 04-01, Q3: 07-01, Q4: 10-01
+Formally, the baseline Taylor Rule can be expressed as:
 
-```{r Obtain Data (Quarterly)}
+$$
+i_t = r^* + \pi_t + 0.5 \bigl(\pi_t - \pi^*\bigr) + 0.5 \bigl(\text{Output Gap}_t\bigr)
+$$
+
+where $i_t$ denotes the nominal policy rate (in our work this is proxied by the federal funds rate), $r^*$ is the equilibrium real interest rate, $\pi_t$ is the observed inflation rate, $\pi^*$ is the target inflation rate, and $(y_t - y_t^*)$ represents the output gap. The coefficients $0.5$ measure the policy responsiveness to inflation and output deviations, respectively. In practice, this framework serves as both a descriptive model of past monetary policy behavior and a normative benchmark for evaluating central bank actions.
+
+In our analysis, we extend the classical Taylor Rule framework into a sequence of increasingly sophisticated econometric models to evaluate both its explanatory power and dynamic consistency with U.S. monetary policy from 1980 through 2024. We begin by estimating a static **OLS-based Taylor Rule**, which provides a benchmark representation of the policy rate as a function of inflation and output gaps. We then assess the model’s residual properties, testing for serial correlation and nonstationarity, and subsequently fit an **ARIMA model** to capture any remaining temporal structure in the residuals. The inclusion of autoregressive and moving average dynamics allows us to model inertia and short-term deviations from the baseline rule.
+
+Building upon this, we incorporate an **Error-Correction Model (ECM)** to evaluate the potential for cointegrating relationships among the interest rate, inflation, and output variables, reflecting the long-run equilibrium behavior implied by the Taylor framework. Finally, we employ a **Vector Autoregression (VAR)** model to capture the full system of interactions among the federal funds rate, inflation gap, and output gap, allowing for feedback effects and joint forecasting. The VAR structure also facilitates the computation of **Impulse Response Functions (IRFs)**, which trace the temporal propagation of policy and macroeconomic shocks across the system.
+
+Together, these modeling stages provide a comprehensive empirical investigation of the Taylor Rule as both a static policy guideline and a dynamic representation of monetary behavior. The progression from OLS to ARIMA, ECM, and VAR frameworks enables us to evaluate how the Federal Reserve’s policy reactions have evolved over time, the extent to which they align with theoretical prescriptions, and how well different models capture the interdependence of interest rates, inflation, and output dynamics in the post-1980 monetary regime.
+
+```{r Task 1.1 Obtain Data (Quarterly), echo=FALSE, include=FALSE, warning=FALSE}
 api_key <- '3949fd9fcfaa43711339ce7b8a243180'
 
 fredr_set_key(api_key)
-
 
 # Federal Funds Effective Rate (FFER)
 ffer_full <- fredr(
@@ -53,8 +65,6 @@ ffer_full <- fredr(
 
 head(ffer_full)
 
-
-
 # Personal Consumption Expenditures Index (PCEPI) - Inflation measure
 pcepi_full <- fredr(
   series_id = "PCEPI",
@@ -65,8 +75,6 @@ pcepi_full <- fredr(
 
 head(pcepi_full)
 
-
-
 # Real GDP
 gdp_full <- fredr(
   series_id = "GDPC1",
@@ -76,7 +84,6 @@ gdp_full <- fredr(
 )
 
 head(gdp_full)
-
 
 # Potential Real GDP
 pot_gdp_full <- fredr(
@@ -91,12 +98,11 @@ head(pot_gdp_full)
 
 ```
 
-```{r Construct Variables}
+```{r Task 1.2 Construct Variables, echo=FALSE, include=FALSE, warning=FALSE}
 # Add pct_chg_pce col to PCE series
 t_val <- pcepi_full$value
 t_minus_one_val <- lag(pcepi_full$value, 1)
 pcepi_full$pct_chg_pce <- (t_val - t_minus_one_val) / t_minus_one_val
-
 
 gdp_merged <- inner_join(gdp_full, pot_gdp_full, by='date')
 
@@ -109,7 +115,7 @@ gdp_merged <- gdp_merged %>% rename(realtime_start = realtime_start.x, realtime_
 output_gap <- gdp_merged %>% select(date, series_id, value, realtime_start, realtime_end)
 ```
 
-```{r FFER Plot + Summary Statistics}
+```{r Task 1.3.1 FFER Plot + Summary Statistics, echo=FALSE, include=TRUE, warning=FALSE, fig.align="center", fig.height=4, warning=FALSE}
 
 ffer_full %>% 
   ggplot(aes(x = date, y = value)) + 
@@ -117,6 +123,18 @@ ffer_full %>%
   labs(title = "Federal Funds Effective Rate (FFER)",
        x = "date",
        y = 'FFER')
+
+#ffer_full %>%
+#  summarize(
+#    mean = mean(value, na.rm = TRUE),
+#    var_value  = var(value, na.rm = TRUE),
+#    sd_value   = sd(value, na.rm = TRUE),
+#    n_obs      = n()
+#  )
+
+```
+
+```{r Task 1.3.1.2 Summary Statistics, echo=FALSE, include=FALSE, warning=FALSE, fig.align="center", warning=FALSE}
 
 ffer_full %>%
   summarize(
@@ -128,16 +146,45 @@ ffer_full %>%
 
 ```
 
-\<Comments\>
 
-```{r PCEPI Plot + Summary Statistics}
-pcepi_full %>% 
+The summary statistics of the federal funds rate series provide a concise quantitative overview of the data used in the analysis. Across 183 quarterly observations spanning 1980 Q1 – 2024 Q4, the average policy rate is approximately $4.42\%$, with a variance of $15.3$ and a standard deviation of $3.91$. This level of dispersion highlights the considerable volatility of U.S. monetary policy across distinct economic regimes. The distribution reflects several key macroeconomic episodes visible in the plotted series: the elevated interest rates of the early 1980s aimed at curbing double-digit inflation, the steady declines following the 1990s expansion and the 2001 dot-com correction, the near-zero rates maintained during the 2008–2015 Great Recession recovery, and the renewed monetary tightening in the post-2020 period as inflation re-emerged. Together, these descriptive statistics and historical inflection points frame the context for the econometric modeling that follows, illustrating both the persistence and cyclicality inherent in the policy rate dynamics.
+
+One may note a few key historical events that appear in the graph:
+
+-   A near-zero interest rate between 2008 and 2015. This rate was a result of the 2008 Grand Recession
+
+-   The 1980s had very high interest rates in order to curb high rates of inflation
+
+-   Rates were additionally cut in 2000 in response to the dot-com bubble
+
+-   In 2020, rates were cut to near-zero as a result of the pandemic
+
+
+
+```{r Task 1.3.2 PCEPI Plot + Summary Statistics, echo=FALSE, include=TRUE, warning=FALSE}
+library(ggplot2)
+library(patchwork)
+
+p1 <- pcepi_full %>% 
   ggplot(aes(x = date, y = value)) + 
-  geom_line() + 
-  labs(title = "Personal Consumption Expenditures Index (PCEPI)",
-       x = "date",
-       y = 'PCEPI')
+  geom_line(color = "black") + 
+  labs(title = "PCE Inflation Index",
+       x = "Date",
+       y = "PCEPI") +
+  theme_minimal()
 
+p2 <- pcepi_full %>% 
+  ggplot(aes(x = date, y = pct_chg_pce * 100)) + 
+  geom_line(color = "black") + 
+  labs(title = "Percent Change in PCE",
+       x = "Date",
+       y = "% Change PCE") +
+  theme_minimal()
+
+p1 + p2
+```
+
+```{r Task 1.3.2.2, echo=FALSE, include=FALSE}
 pcepi_full %>%
   summarize(
     mean = mean(value, na.rm = TRUE),
@@ -145,27 +192,48 @@ pcepi_full %>%
     sd_value   = sd(value, na.rm = TRUE),
     n_obs      = n()
   )
-
-pcepi_full %>% 
-  ggplot(aes(x = date, y = pct_chg_pce)) + 
-  geom_line() + 
-  labs(title = "Pct Change PCE",
-       x = "date",
-       y = 'Pct Change PCE')
 ```
 
-\<Comments\>
+PCEPI (Inflation) shows events that are related to events that spurred the FFER changes we see in the above graph.
 
-```{r GDP Plot + Summary Statistics}
+-   High inflation characterized the early 1980s, as shown by the peak in the graph
+
+-   Very low inflation appears in 2008 during the 2008 financial crisis 
+
+-   Inflation hit local maxima around 2020 as a result of the pandemic
+
+The Personal Consumption Expenditures Price Index (PCEPI) provides the measure of inflation used in this analysis and serves as the nominal anchor of the Taylor Rule framework. Over the 1980–2024 sample, the index exhibits a mean level of approximately $78.6$, with a variance of $501.5$ and a standard deviation of $22.4$, across $182$ quarterly observations. This long-run upward trend reflects the cumulative nature of price growth, while the first-differenced or percentage-change series reveals cyclical fluctuations in inflation dynamics. Periods of particularly high inflation are evident in the early 1980s, consistent with the post–oil-shock stagflation era that motivated aggressive monetary tightening. In contrast, near-zero inflation during the 2008–2015 period reflects deflationary pressures from the global financial crisis. More recently, inflation accelerated sharply around 2020–2022 following the pandemic-induced supply and demand shocks. These fluctuations correspond closely to shifts in the federal funds rate observed earlier, confirming that PCE inflation pressures have historically been a central driver of U.S. monetary policy adjustments.
+
+
+```{r Task 1.3.3 GDP Plot + Summary Statistics, echo=FALSE, include=TRUE, warning=FALSE}
 # Do regular GDP, POT GDP, and output gap
 
-gdp_full %>% 
+p1 <- gdp_full %>% 
   ggplot(aes(x = date, y = value)) + 
   geom_line() + 
   labs(title = "Real GDP ",
        x = "date",
        y = 'GDP')
 
+p2 <- pot_gdp_full %>% 
+  ggplot(aes(x = date, y = value)) + 
+  geom_line() + 
+  labs(title = "Potential Real GDP ",
+       x = "date",
+       y = 'GDPPOT')
+
+p3 <- output_gap %>% 
+  ggplot(aes(x = date, y = value)) + 
+  geom_line() + 
+  labs(title = "Output gap",
+       x = "date",
+       y = 'Output gap')
+
+p1 + p2 + p3
+
+```
+
+```{r, echo=FALSE, include=FALSE}
 gdp_full %>%
   summarize(
     mean = mean(value, na.rm = TRUE),
@@ -174,13 +242,6 @@ gdp_full %>%
     n_obs      = n()
   )
 
-pot_gdp_full %>% 
-  ggplot(aes(x = date, y = value)) + 
-  geom_line() + 
-  labs(title = "Potential Real GDP ",
-       x = "date",
-       y = 'GDPPOT')
-
 pot_gdp_full %>%
   summarize(
     mean = mean(value, na.rm = TRUE),
@@ -188,25 +249,25 @@ pot_gdp_full %>%
     sd_value   = sd(value, na.rm = TRUE),
     n_obs      = n()
   )
-
-output_gap %>% 
-  ggplot(aes(x = date, y = value)) + 
-  geom_line() + 
-  labs(title = "Output gap",
-       x = "date",
-       y = 'Output gap')
 ```
+GDP appears to steadily increase from 1980 to 2020, with a notable dip in 2020 due the COVID pandemic. The output gap timeseries is affected by similar events as FFER and PCEPI:
 
-\<Comments\>
+-   A dip in the early 1980s is seen, which is at the same time as high inflation and spiked interest rates
+
+-   A major dip in 2008 exists, which is at the time of the 2008 financial crisis
+
+-   A sharp dip in 2020 is seen, corresponding to the time of the COVID pandemic
+
+The level series for real GDP and potential GDP are large‐scale aggregates, so their summary moments primarily reflect trend growth rather than short-run variation. Both series have high means ($\approx 1.45\times10^4$) and large standard deviations ( $\approx 4.75\times10^3$), consistent with strong deterministic trend and suggesting that levels are likely **non-stationary** without detrending or differencing. By contrast, the **output gap**, defined as $100\times(\text{GDPC1}-\text{GDPPOT})/\text{GDPPOT}$, is constructed around zero and exhibits far smaller dispersion; its spikes align with major downturns (early 1980s, 2008-09, 2020). Practically, this implies that GDP and GDPPOT should be modeled in **changes** (or as a **cointegrated** pair), while the output gap can be used directly in regressions because it behaves more like a stationary deviation from trend.
+
 
 # Task 2
 
-**2.1: Frequency Alignment (Resampling)**
+## Task 2.1: Frequency Alignment (Resampling)
 
 Based on the format of the API call to FRED, data is received at a quarterly cadence, with an average over all months in the quarter calculated and returned in the dataframe. No resampling was done.
 
-```{r Ensure same quarterly date index for all series}
-
+```{r Task 2.1 Ensure same quarterly date index for all series, echo=FALSE, include=FALSE}
 
 ensure_same_dates <- ffer_full %>% 
   full_join(gdp_full, by='date') %>%
@@ -222,21 +283,21 @@ output_gap <- output_gap %>% filter(date <= as.Date('2025-04-01'))
 
 ```
 
-**2.2: Outlier Detection & Treatment**
+## Task 2.2 Outlier Detection & Treatment
 
-[Method: Hampel filter]{.underline}
+### Hampel filter
 
 To detect outliers, we've chosen to use the Hampel filter. We prefer this method because based on a visual examination of FFER, PECPI, and GDP data, scores appear to be mostly following either an upward trend or a fluctuating downward trend, with few outliers. The outliers that do appear (i.e. in Real GDP around 2020) are within the data (as opposed to on the upper and lower ends of the data). Thus, this would not be caught by winsorization. The rolling window calculations from a Hampel filter (relying on deviations from a median) would catch these outliers and smooth out the data. Z-scores, as well, is best suited to normally distributed data, which we don't have.
 
-[Outlier Detection]{.underline}
+### Outlier Detection
 
-We utilize a Hampel filter for the FFER, PECPI, GDP, GDPPOT, and output gap timeseries. A window size of \_\_\_ appeared to smooth out outliers best upon a visual examination of the corrected timeseries data
+We utilize a Hampel filter for the FFER, PECPI, GDP, GDPPOT, and output gap timeseries. A window size of 5 appeared to smooth out outliers best upon a visual examination of the corrected timeseries data. While, we ran a Hampel filters to detect potential outliers, we retained the original FFER series for estimation because large rate changes reflect actual policy, not data errors.
 
-```{r Apply Hampel filters}
+```{r Task 2.2.1 Apply Hampel filters, echo=FALSE, include=FALSE}
 
 ffer_full$hampel_val <- hampel(ffer_full$value, k = 5)[[1]]
 
-ffer_full %>%
+p1 <- ffer_full %>%
   ggplot(aes(x = date)) + 
   geom_line(aes(y = hampel_val, color = "Hampel")) +
   geom_line(aes(y = value, color = "Original")) +
@@ -246,14 +307,13 @@ ffer_full %>%
   scale_color_manual(values = c("Hampel" = "blue", "Original" = "red"),
                      name = "Legend")
 
-
+p1
 ```
 
-```{r}
-
+```{r Task 2.2.2, echo=FALSE, include=FALSE}
 pcepi_full$hampel_val <- hampel(pcepi_full$value, k = 5, )[[1]]
 
-pcepi_full %>%
+p2 <- pcepi_full %>%
   ggplot(aes(x = date)) + 
   geom_line(aes(y = hampel_val, color = "Hampel")) +
   geom_line(aes(y = value, color = "Original")) +
@@ -262,12 +322,14 @@ pcepi_full %>%
        y = "Value") +
   scale_color_manual(values = c("Hampel" = "blue", "Original" = "red"),
                      name = "Legend")
+
+p2
 ```
 
-```{r}
+```{r Task 2.2.3, echo=FALSE, include=FALSE}
 gdp_full$hampel_val <- hampel(gdp_full$value, k = 5, )[[1]]
 
-gdp_full %>%
+p3 <- gdp_full %>%
   ggplot(aes(x = date)) + 
   geom_line(aes(y = hampel_val, color = "Hampel")) +
   geom_line(aes(y = value, color = "Original")) +
@@ -278,10 +340,10 @@ gdp_full %>%
                      name = "Legend")
 ```
 
-```{r}
+```{r Task 2.3.4, echo=FALSE, include=FALSE}
 pot_gdp_full$hampel_val <- hampel(pot_gdp_full$value, k = 5, )[[1]]
 
-pot_gdp_full %>%
+p4 <- pot_gdp_full %>%
   ggplot(aes(x = date)) + 
   geom_line(aes(y = hampel_val, color = "Hampel")) +
   geom_line(aes(y = value, color = "Original")) +
@@ -292,37 +354,47 @@ pot_gdp_full %>%
                      name = "Legend")
 ```
 
-```{r}
-output_gap$value <- (gdp_full$hampel_val - pot_gdp_full$hampel_val) * 100 / pot_gdp_full$hampel_val
+```{r, echo=FALSE, include=TRUE, warning=FALSE, fig.width=10}
 
+p1 + p2
+p3 + p4
 ```
 
-**2.3: Seasonal Adjustment**
+```{r, echo=FALSE, include=TRUE}
+output_gap$value <- (gdp_full$hampel_val - pot_gdp_full$hampel_val) * 100 / pot_gdp_full$hampel_val
+```
 
-[Detection]{.underline}
+## Task 2.3: Seasonal Adjustment
 
-```{r FFER Seasonal Plots + QS Test}
+### Detection 
+
+```{r Task 2.3.1 FFER Seasonal Plots + QS Test, echo=FALSE, include=TRUE, fig.width=10}
 
 ffer_full <- ffer_full %>% mutate(q = quarter(date))
 
 
 ffer_full$q_factor <- factor(ffer_full$q, levels = c("1", "2", "3", "4"))
 
-ggplot(ffer_full, aes(x = q_factor, y = value)) +
+p1 <- ggplot(ffer_full, aes(x = q_factor, y = value)) +
   geom_boxplot(fill = "skyblue", color = "black") +
   labs(title = "Distribution of Values by Quarter",
        x = "Quarter",
        y = "Value") +
   theme_minimal()
 
-ffer_full %>% filter(q == 1) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "FFER Q1", x = "Date", y = "Value")
+p2 <- ffer_full %>% filter(q == 1) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "FFER Q1", x = "Date", y = "Value")
 
-ffer_full %>% filter(q == 2) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "FFER Q2", x = "Date", y = "Value")
+p3 <- ffer_full %>% filter(q == 2) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "FFER Q2", x = "Date", y = "Value")
 
-ffer_full %>% filter(q == 3) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "FFER Q3", x = "Date", y = "Value")
+p4 <- ffer_full %>% filter(q == 3) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "FFER Q3", x = "Date", y = "Value")
 
-ffer_full %>% filter(q == 4) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "FFER Q4", x = "Date", y = "Value")
+p5 <- ffer_full %>% filter(q == 4) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "FFER Q4", x = "Date", y = "Value")
 
+p1
+p2 + p3
+p4 + p5
+```
+```{r echo=FALSE, include=FALSE}
 start_year <- 1980
 start_quarter <- 1
 
@@ -331,28 +403,35 @@ ffer_ts <- ts(ffer_full$hampel_val, start = c(start_year, start_quarter), freque
 seastests::qs(ffer_ts)
 ```
 
-According to our QS test, no evidence for seasonality in the FFER data exists
+The QS test for seasonality applied to the Federal Funds Effective Rate (FFER) produced a test statistic of 0 with a p-value of 1. This result provides no evidence of seasonality in the FFER series. In other words, the Federal Funds Rate does not exhibit systematic quarterly or annual seasonal fluctuations. This is consistent with the institutional nature of monetary policy decisions—interest rate adjustments occur in response to macroeconomic conditions rather than regular seasonal cycles. Consequently, no seasonal adjustment or differencing is necessary for the FFER series before modeling.
 
-```{r PCEPI Seasonal Plots + QS Test}
+
+```{r PCEPI Seasonal Plots + QS Test, echo=FALSE, include=TRUE, warning=FALSE}
 pcepi_full <- pcepi_full %>% mutate(q = quarter(date))
 
 pcepi_full$q_factor <- factor(pcepi_full$q, levels = c("1", "2", "3", "4"))
 
-ggplot(pcepi_full, aes(x = q_factor, y = value)) +
+p1<- ggplot(pcepi_full, aes(x = q_factor, y = value)) +
   geom_boxplot(fill = "skyblue", color = "black") +
   labs(title = "Distribution of Values by Quarter",
        x = "Quarter",
        y = "Value") +
   theme_minimal()
 
-pcepi_full %>% filter(q == 1) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "PCEPI Q1", x = "Date", y = "Value")
+p2<- pcepi_full %>% filter(q == 1) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "PCEPI Q1", x = "Date", y = "Value")
 
-pcepi_full %>% filter(q == 2) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "PCEPI Q2", x = "Date", y = "Value")
+p3<- pcepi_full %>% filter(q == 2) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "PCEPI Q2", x = "Date", y = "Value")
 
-pcepi_full %>% filter(q == 3) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "PCEPI Q3", x = "Date", y = "Value")
+p4 <- pcepi_full %>% filter(q == 3) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "PCEPI Q3", x = "Date", y = "Value")
 
-pcepi_full %>% filter(q == 4) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "PCEPI Q4", x = "Date", y = "Value")
+p5 <- pcepi_full %>% filter(q == 4) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "PCEPI Q4", x = "Date", y = "Value")
 
+p1
+p2 + p3
+p4 + p5 
+```
+
+```{r, echo=FALSE, include=FALSE}
 start_year <- 1980
 start_quarter <- 1
 
@@ -361,28 +440,34 @@ pcepi_ts <- ts(pcepi_full$hampel_val, start = c(start_year, start_quarter), freq
 seastests::qs(pcepi_ts)
 ```
 
-According to our QS test, evidence for seasonality in the PCEPI data exists.
+The QS test in the quarterly PCEPI inflation series produced a statistic of 16.15 with a p-value of 0.00031, indicating statistically significant seasonal effects. Therefore, the raw series exhibits recurring within-year variation, justifying the use of seasonal differencing or seasonal adjustment before fitting ARIMA-type models.
 
-```{r GDP Seasonal Plots + QS Test}
+```{r GDP Seasonal Plots, echo=FALSE, include=TRUE, warning=FALSE, fig.width=10}
 gdp_full <- gdp_full %>% mutate(q = quarter(date))
 
 gdp_full$q_factor <- factor(gdp_full$q, levels = c("1", "2", "3", "4"))
 
-ggplot(gdp_full, aes(x = q_factor, y = value)) +
+p1 <- ggplot(gdp_full, aes(x = q_factor, y = value)) +
   geom_boxplot(fill = "skyblue", color = "black") +
   labs(title = "Distribution of Values by Quarter",
        x = "Quarter",
        y = "Value") +
   theme_minimal()
 
-gdp_full %>% filter(q == 1) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "GDP Q1", x = "Date", y = "Value")
+p2 <- gdp_full %>% filter(q == 1) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "GDP Q1", x = "Date", y = "Value")
 
-gdp_full %>% filter(q == 2) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "GDP Q2", x = "Date", y = "Value")
+p3 <- gdp_full %>% filter(q == 2) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "GDP Q2", x = "Date", y = "Value")
 
-gdp_full %>% filter(q == 3) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "GDP Q3", x = "Date", y = "Value")
+p4 <- gdp_full %>% filter(q == 3) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "GDP Q3", x = "Date", y = "Value")
 
-gdp_full %>% filter(q == 4) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "GDP Q4", x = "Date", y = "Value")
+p5 <- gdp_full %>% filter(q == 4) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "GDP Q4", x = "Date", y = "Value")
 
+p1 
+p2 + p3
+p4 + p5
+```
+
+```{r GDP QS Test, echo=FALSE, include=FALSE, warning=FALSE, fig.width=10}
 start_year <- 1980
 start_quarter <- 1
 
@@ -391,28 +476,36 @@ gdp_full_ts <- ts(gdp_full$hampel_val, start = c(start_year, start_quarter), fre
 seastests::qs(gdp_full_ts)
 ```
 
-According to our QS test, no evidence for seasonality in the GDP data exists
+Here, our QS seasonality test for the Real GDP series yielded a test statistic of 0 and a p-value of 1, indicating no detectable seasonal pattern in the data. This result suggests that GDP, as reported in seasonally adjusted form by the Bureau of Economic Analysis (BEA), already has its intra-year seasonal components removed. Therefore, no additional seasonal adjustment or seasonal differencing is necessary prior to modeling. 
 
-```{r GDPPOT Seasonal Plots + QS Test}
+This is consistent with standard macroeconomic data practices: most official GDP series are *seasonally adjusted annualized rates (SAAR)*, meaning any regular quarterly effects have already been filtered out by the data provider.
+
+```{r GDPPOT Seasonal Plots, echo=FALSE, include=TRUE, warning=FALSE}
 pot_gdp_full <- pot_gdp_full %>% mutate(q = quarter(date))
 
 pot_gdp_full$q_factor <- factor(pot_gdp_full$q, levels = c("1", "2", "3", "4"))
 
-ggplot(pot_gdp_full, aes(x = q_factor, y = value)) +
+p1 <- ggplot(pot_gdp_full, aes(x = q_factor, y = value)) +
   geom_boxplot(fill = "skyblue", color = "black") +
   labs(title = "Distribution of Values by Quarter",
        x = "Quarter",
        y = "Value") +
   theme_minimal()
 
-pot_gdp_full %>% filter(q == 1) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "GDPPOT Q1", x = "Date", y = "Value")
+p2 <- pot_gdp_full %>% filter(q == 1) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "GDPPOT Q1", x = "Date", y = "Value")
 
-pot_gdp_full %>% filter(q == 2) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "GDPPOT Q2", x = "Date", y = "Value")
+p3 <- pot_gdp_full %>% filter(q == 2) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "GDPPOT Q2", x = "Date", y = "Value")
 
-pot_gdp_full %>% filter(q == 3) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "GDPPOT Q3", x = "Date", y = "Value")
+p4 <- pot_gdp_full %>% filter(q == 3) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "GDPPOT Q3", x = "Date", y = "Value")
 
-pot_gdp_full %>% filter(q == 4) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "GDPPOT Q4", x = "Date", y = "Value")
+p5 <- pot_gdp_full %>% filter(q == 4) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "GDPPOT Q4", x = "Date", y = "Value")
 
+p1 
+p2 + p3
+p4 + p5
+```
+
+```{r GDPPOT QS Test, echo=FALSE, include=FALSE}
 start_year <- 1980
 start_quarter <- 1
 
@@ -421,13 +514,20 @@ pot_gdp_full_ts <- ts(pot_gdp_full$hampel_val, start = c(start_year, start_quart
 seastests::qs(pot_gdp_full_ts)
 ```
 
-According to our QS test, evidence for seasonality in the GDPPOT data exists
+The QS test for the Potential GDP (GDPPOT) series produced a test statistic of 204.06 with a p-value of 0, providing overwhelming evidence of seasonality. This result indicates that the GDPPOT series, as currently specified, contains recurring within-year fluctuations that are not seasonally adjusted.  
 
-[Seasonal Adjustment via]{.underline} **X-13ARIMA-SEATS**
+In practice, this is somewhat expected: the *potential output* series is an estimated smooth trend of what the economy could produce at full capacity, but depending on how it was constructed or interpolated, the quarterly data may still exhibit minor cyclical or deterministic seasonal behavior.  
 
-\<Justify method\>
+Therefore, to ensure consistency with other macroeconomic variables in the model (such as Real GDP and FFER), it may be appropriate to apply **seasonal differencing** or a **low-pass filter** (e.g., HP filter) to the GDPPOT series before computing the output gap or including it in time series models.
 
-```{r}
+
+### Seasonal Adjustment via X-13ARIMA-SEATS
+
+This method is used because it allows for timeseries that can be decomposed additively or multiplicatively, allowing for maximum flexibility. The trend, seasonal component, and irregular component are all estimated and the algorithm uses centered moving averages to remove the seasonal component.
+
+Source: <https://en.wikipedia.org/wiki/X-13ARIMA-SEATS>
+
+```{r, echo=FALSE, include=FALSE}
 
 pcepi_fit <- seas(pcepi_ts)
 
@@ -436,9 +536,11 @@ pcepi_full$s_adj_val <- final(pcepi_fit)
 pot_gdp_fit <- seas(pot_gdp_full_ts)
 
 pot_gdp_full$s_adj_val <- final(pot_gdp_fit)
+```
 
 
-pot_gdp_full %>%
+```{r, echo=FALSE, include=TRUE, fig.width=10}
+p1 <- pot_gdp_full %>%
   ggplot(aes(x = date)) + 
   geom_line(aes(y = s_adj_val, color = "Seasonally Adjusted")) +
   geom_line(aes(y = value, color = "Original")) +
@@ -448,7 +550,7 @@ pot_gdp_full %>%
   scale_color_manual(values = c("Seasonally Adjusted" = "blue", "Original" = "red"),
                      name = "Legend")
 
-pcepi_full %>%
+p2 <- pcepi_full %>%
   ggplot(aes(x = date)) + 
   geom_line(aes(y = s_adj_val, color = "Seasonally Adjusted")) +
   geom_line(aes(y = value, color = "Original")) +
@@ -457,37 +559,14 @@ pcepi_full %>%
        y = "Value") +
   scale_color_manual(values = c("Seasonally Adjusted" = "blue", "Original" = "red"),
                      name = "Legend")
+
+p1 + p2
 ```
 
-\<Show before vs. After comparison\>
-
-```{r}
-# # Split into train and test set 
-# ffer_train <- ffer_full %>% filter(date >= as.Date('1980-01-01') & date <= as.Date('2023-10-01')) 
-
-# ffer_test <- ffer_full %>% filter(date >= as.Date('2024-01-01')) 
-
-#  # # Split into train and test set 
-
-# pcepi_train <- pcepi_full %>% filter(date >= as.Date('1980-01-01') & date <= as.Date('2023-10-01')) 
-
-# pcepi_test <- pcepi_full %>% filter(date >= as.Date('2024-01-01')) 
-
-#  # # Split into train and test set 
-
-# gdp_train <- gdp_full %>% filter(date >= as.Date('1980-01-01') & date <= as.Date('2023-10-01')) 
-
-# gdp_test <- gdp_full %>% filter(date >= as.Date('2024-01-01')) 
-
-#  # # Split into train and test set 
-# pot_gdp_train <- pot_gdp_full %>% filter(date >= as.Date('1980-01-01') & date <= as.Date('2023-10-01')) 
-
-# pot_gdp_test <- pot_gdp_full %>% filter(date >= as.Date('2024-01-01'))
-```
 
 # Task 3
 
-```{r}
+```{r Task 3.1, echo=FALSE, include=FALSE}
 infl_data_tsbl <- ffer_full %>% 
   select(date, hampel_val) %>% 
   rename(FEDFUNDS_hampel = hampel_val) %>%
@@ -513,6 +592,53 @@ infl_data_tsbl_train <- infl_data_tsbl %>%
 infl_data_tsbl_test <- infl_data_tsbl %>% 
   filter(date > yearquarter("2022 Q4"))
 ```
+
+<!--```{r Task 3.1 corrected}
+infl_data_tsbl <- ffer_full %>%
+  transmute(
+    date,
+    FEDFUNDS = value,
+    FEDFUNDS_hampel = hampel_val
+  ) %>%
+  left_join(
+    pcepi_full %>%
+      arrange(date) %>%
+      mutate(
+        PCEPI_s_adj = ifelse(is.na(s_adj_val), value, s_adj_val),
+        infl_sa_q = 100 * (PCEPI_s_adj / lag(PCEPI_s_adj) - 1),
+        inflation_gap = infl_sa_q - 2
+      ) %>%
+      select(date, PCEPI_s_adj, infl_sa_q, inflation_gap),
+    by = "date"
+  ) %>%
+  left_join(
+    gdp_full %>%
+      transmute(date, GDPC1_hampel = hampel_val),
+    by = "date"
+  ) %>%
+  left_join(
+    pot_gdp_full %>%
+      transmute(date, GDPPOT_s_adj = s_adj_val),
+    by = "date"
+  ) %>%
+  mutate(
+    output_gap = 100 * (GDPC1_hampel - GDPPOT_s_adj) / GDPPOT_s_adj,
+    date = yearquarter(date)
+  ) %>%
+  as_tsibble(index = date)
+
+# Moved from below!
+infl_data_tsbl_train <- infl_data_tsbl %>% 
+  mutate(
+    d_FEDFUNDS_hampel = difference(FEDFUNDS_hampel),
+    d_PCEPI_s_adj = difference(PCEPI_s_adj),
+    d_GDPC1_hampel = difference(GDPC1_hampel),
+    d_GDPPOT_s_adj = difference(GDPPOT_s_adj)
+  )
+
+infl_data_tsbl_test <- infl_data_tsbl %>%
+  filter(date > yearquarter("2022 Q4"))
+```-->
 
 ```{r}
 vars <- names(select(infl_data_tsbl_train, where(is.numeric)))
@@ -546,6 +672,16 @@ Using the General to Specific approach, we first evaluate for drift and trend te
 These test results suggest that the PCEPI and GDPC variables should be differenced before before use in modeling, to avoid spurious regression. The GDPPOT variable is trend-stationary because it does not contain a unit-root but it does contain a deterministic trend. In order to capture the explanatory power of the variable, GDPPOT_s_adj should not be differenced.
 
 ```{r}
+infl_data_tsbl_train <- infl_data_tsbl_train %>% 
+  mutate(
+    d_FEDFUNDS_hampel = difference(FEDFUNDS_hampel),
+    d_PCEPI_s_adj = difference(PCEPI_s_adj),
+    d_GDPC1_hampel = difference(GDPC1_hampel),
+    d_GDPPOT_s_adj = difference(GDPPOT_s_adj)
+  )
+```
+
+```{r}
 adf.test(infl_data_tsbl_train$d_PCEPI_s_adj)
 ```
 
@@ -572,16 +708,6 @@ za_results <- map_dfr(vars, function(v) {
 })
 
 za_results
-```
-
-```{r}
-infl_data_tsbl_train <- infl_data_tsbl_train %>% 
-  mutate(
-    d_FEDFUNDS_hampel = difference(FEDFUNDS_hampel),
-    d_PCEPI_s_adj = difference(PCEPI_s_adj),
-    d_GDPC1_hampel = difference(GDPC1_hampel),
-    d_GDPPOT_s_adj = difference(GDPPOT_s_adj)
-  )
 ```
 
 ### Discussion:
@@ -651,7 +777,19 @@ This difference may be attributed to the relative calm in the market during the 
 ```
 
 ```{r}
-taylor_resid <- resid(taylor_mod)
+
+# Anthony comment - theres an error here. `taylor_mod` above is a MABLE not a numeric vector. Need the residual as a numeric vector...
+
+# taylor_resid <- resid(taylor_mod)
+# adf.test(taylor_resid)
+# corrected code below -
+
+taylor_resid_tsbl <- residuals(taylor_mod)
+
+taylor_resid <- taylor_resid_tsbl %>%
+  filter(.model == "tlsm") %>%
+  pull(.resid)
+
 adf.test(taylor_resid)
 ```
 
@@ -710,16 +848,387 @@ for (t in 2:length(d_hat)) {
   i_hat[t] <- i_hat[t - 1] + d_hat[t]
 }
 
+# We dont show the in-sample performance
 ecm_rmse <- sqrt(mean((infl_data_tsbl_ecm_test$FEDFUNDS_hampel - i_hat)^2, na.rm = TRUE))
 
 ecm_rmse
 ```
 
 ```{r}
-ols_fc <- forecast(taylor_mod, newdata = as.data.frame(infl_data_tsbl_test))
-ols_pred <- ols_fc$mean
-ols_rmse <- sqrt(mean((infl_data_tsbl_test$FEDFUNDS_hampel - ols_pred)^2, na.rm = TRUE))
+# Anthony comment - this is not worrking because taylor_mod is a table not numeric 
+# ols_fc <- forecast(taylor_mod, newdata = infl_data_tsbl_test)
+# ols_pred <- ols_fc$mean
+# ols_rmse <- sqrt(mean((infl_data_tsbl_test$FEDFUNDS_hampel - ols_pred)^2, na.rm = TRUE))
+# ols_rmse
+
+ols_lm <- lm(FEDFUNDS_hampel ~ inflation_gap + output_gap, data = infl_data_tsbl_train)
+
+ols_fc <- forecast(ols_lm, newdata = as.data.frame(infl_data_tsbl_test))
+
+ols_pred <- as.numeric(ols_fc$mean)
+
+ols_rmse <- sqrt(mean(
+  (infl_data_tsbl_test$FEDFUNDS_hampel - ols_pred)^2,
+  na.rm = TRUE
+))
+
 ols_rmse
 ```
 
 The ECM model performs slightly worse with a higher RMSE.
+
+# Task 6: ARIMA Modeling of Taylor Rule Errors
+
+```{r Task 6.1 Taylor Rule prediction - OLS model, echo=FALSE, include=FALSE}
+
+# Rebuilding train and test for this task for posterity sake 
+train_df <- infl_data_tsbl_train %>%
+  select(date, FEDFUNDS_hampel, inflation_gap, output_gap) %>%
+  filter(!is.na(FEDFUNDS_hampel),
+         !is.na(inflation_gap),
+         !is.na(output_gap)) %>%
+  arrange(date)
+
+test_df <- infl_data_tsbl_test %>%
+  select(date, FEDFUNDS_hampel, inflation_gap, output_gap) %>%
+  filter(!is.na(FEDFUNDS_hampel),
+         !is.na(inflation_gap),
+         !is.na(output_gap)) %>%
+  arrange(date)
+
+# Rebuilding the Taylor Rule OLS Model (same as Daniel's above)
+ols_model <- lm(FEDFUNDS_hampel ~ inflation_gap + output_gap, data = train_df)
+ols_resid_train <- resid(ols_model)
+
+start_year    <- lubridate::year(train_df$date[1])
+start_quarter <- lubridate::quarter(train_df$date[1])
+ols_resid_train_ts <- ts(ols_resid_train,
+                         start = c(start_year, start_quarter),
+                         frequency = 4)
+
+# Running some additional stationarity tests on the residuals for fun. 
+kpss.test(ols_resid_train_ts)  
+
+za_test <- ur.za(ols_resid_train_ts, model = "both")
+summary(za_test)
+
+pp_test <- ur.pp(ols_resid_train_ts,
+                 type = "Z-tau",
+                 model = "trend",
+                 lags  = "short")
+summary(pp_test)
+
+```
+
+To build on work completed above, we provide additional stationarity tests on the residuals. Here, applied three complementary unit-root diagnostics to the Taylor Rule residuals, denoted $\{\hat{\varepsilon}_t\}$. The **KPSS** test (null $H_0$: stationarity) indicates that the series is stationary in levels once a deterministic trend is allowed. Specifically, the level-stationarity version yields $p \ge 0.10$, and the trend-stationarity version also yields $p \ge 0.10$, while the “with drift, no trend” variant rejects with $p \le 0.01$. Taken together, these results suggest that $\hat{\varepsilon}_t$ is **trend–stationary** rather than containing a stochastic trend: deviations are mean-reverting around a deterministic component. Formally, we fail to reject stationarity for $\hat{\varepsilon}_t = \mu + \tau t + u_t$ with $u_t$ covariance-stationary.
+
+Allowing for an endogenous structural change, the **Zivot–Andrews** test rejects the unit-root null once a single break in intercept and trend is permitted. The test statistic is $-7.09$, which is more negative than the 1% critical value ($-5.57$), implying stationarity conditional on one regime shift. The estimated break occurs early in the sample (position $\approx 9$), consistent with a Volcker-era policy shift [1]. Economically, this means the Taylor Rule relationship is stable within regimes but parameters likely changed once, so that $\hat{\varepsilon}_t$ behaves as a stationary process after accounting for that break.
+
+The **Phillips–Perron** test, which shares the ADF null $H_0$ unit root but is robust to serial correlation and heteroskedasticity, also rejects nonstationarity decisively (Z–tau $=-6.41$, beyond the 1% critical value). This corroborates that the residual process does not harbor a stochastic trend once inflation and output gaps are included on the right-hand side.
+
+Overall, the three diagnostics are mutually consistent: $\hat{\varepsilon}_t$ is best characterized as **stationary**, possibly around a deterministic trend and with evidence of a **single structural break**. This justifies modeling the unexplained component with a low-order ARIMA on the residuals. However, we take the route often taken in practice, where differencing once (ARIMA with $d=1$) can act as a convenient device to remove the deterministic drift and any slow-moving break-induced level shift, yielding a stationary innovation process for forecasting. Consequently, the combined forecast we report later follows 
+
+$$
+\widehat{i}_t^{\,\text{combined}}
+\;=\;
+\widehat{i}_t^{\,\text{Taylor}}
+\;+\;
+\widehat{\varepsilon}_t^{\,\text{ARIMA}},
+$$
+
+where $\widehat{i}_t^{\,\text{Taylor}}$ is the OLS Taylor Rule fit and $\widehat{\varepsilon}_t^{\,\text{ARIMA}}$ is the ARIMA forecast of the residual process that is stationary within regimes.
+
+
+
+```{r Task 6.2 ARIMA forecase of the residulas, echo=FALSE, include=TRUE}
+#some visualizations
+p1 <- autoplot(ols_resid_train_ts) +
+  labs(title = "Taylor Rule Residuals (Train)",
+       y = "Residuals",
+       x = "Year") +
+  theme_minimal()
+
+p2 <- ggplot(data.frame(resid = ols_resid_train), aes(x = resid)) +
+  geom_histogram(aes(y = ..density..), bins = 20,
+                 fill = "lightblue", color = "black") +
+  geom_density(color = "red") +
+  labs(title = "Distribution of Taylor Rule Residuals (Train)",
+       x = "Residual", y = "Density") +
+  theme_minimal()
+
+p1 + p2
+```
+
+
+```{r, echo=FALSE, include=FALSE, warning=FALSE}
+
+par(mfrow = c(1, 2))
+acf(ols_resid_train, main = "ACF of OLS Residuals (Train)", lag.max = 20)
+pacf(ols_resid_train, main = "PACF of OLS Residuals (Train)", lag.max = 20)
+par(mfrow = c(1, 1))
+
+# fitting some ARIMA models to compare to auto arima
+y <- ols_resid_train  # residuals from Taylor OLS
+
+# Define p, q grid
+p_max <- 3
+q_max <- 3
+
+candidates <- expand.grid(p = 0:p_max, q = 0:q_max) %>%
+  filter(!(p == 0 & q == 0))
+
+diff_resid <- diff(ols_resid_train)
+diff_resid_ts <- ts(diff_resid, start = c(1980, 1), frequency = 4)
+
+autoplot(diff_resid_ts) +
+  labs(title = "Differenced OLS Residuals", x = "Year", y = "Differenced Residuals") +
+  theme_minimal()
+
+adf.test(diff_resid)
+kpss.test(diff_resid)
+
+fit_arma23 <- Arima(ols_resid_train, order = c(2,0,3))
+fit_arima213 <- Arima(ols_resid_train, order = c(2,1,3))
+AIC(fit_arma23, fit_arima213)
+
+forecast::ndiffs(ols_resid_train)
+
+auto_arima_resid <- auto.arima(ols_resid_train, seasonal = FALSE)
+summary(auto_arima_resid)
+
+forecast::ndiffs(ols_resid_train)
+```
+
+We begin by examining the residual series $\hat{\varepsilon}_t$ from the OLS Taylor Rule model.\
+The time‐series plot of residuals shows long memory and a clear downward drift until the early 2000s, followed by a period of volatility spikes (notably during the 2008 financial crisis and the COVID-19 period). This persistence suggests that the residuals are not white noise and may exhibit autocorrelation or a weak unit root, despite the test statistics on the non-differenced residuals above.
+
+The autocorrelation and partial autocorrelation plots (ACF and PACF) reinforce this observation.\
+The **ACF** decays slowly, indicating strong persistence in shocks, while the **PACF** shows a sharp cutoff after lag 1. This pattern is consistent with an autoregressive process of order one, AR(1), or potentially an ARIMA(1,1,0) structure with a single difference needed to achieve stationarity.\
+Such behavior implies that the shocks to the Taylor Rule equation tend to persist over multiple quarters, rather than dissipating immediately.
+
+After differencing the residuals, the time series of $\Delta \hat{\varepsilon}_t$ becomes mean-reverting with stable variance and no clear trend. Visually, this differenced series appears stationary, suggesting that one level of differencing ($d = 1$) is sufficient to remove the long-run component. Formally, both the **Augmented Dickey–Fuller (ADF)** and **KPSS** tests confirm this:\
+the ADF strongly rejects the null of a unit root (all $p \le 0.01$), while the KPSS fails to reject the null of stationarity ($p \ge 0.10$). Together, these imply that the differenced residuals are stationary.
+
+To formally capture this structure, we fit several ARIMA models. The AIC and BIC comparison indicates that higher-order mixed models outperform pure AR or MA specifications.\
+Specifically, **ARIMA(2,1,3)**, chosen by auto-ARIMA, achieves the lowest AIC ($AIC = 669.37$), outperforming all ARIMA models tested.
+
+The estimated parameters show significant AR and MA terms, confirming that both short-run momentum and shock effects are present.
+
+In summary, the residual diagnostics show that:
+
+1.  The raw residuals $\hat{\varepsilon}_t$ are non-stationary, consistent with persistent policy shocks.\
+2.  First differencing yields stationary residuals $\Delta \hat{\varepsilon}_t$.\
+3.  The optimal model based on information criteria is **ARIMA(2,1,3)**, which balances autoregressive persistence with moving-average smoothing.
+
+This result justifies the use of the combined model:
+
+$$
+\widehat{i}_t^{\,\text{combined}}
+=
+\widehat{i}_t^{\,\text{Taylor}}
++
+\widehat{\varepsilon}_t^{\,\text{ARIMA}},
+$$
+
+where the ARIMA component refines the Taylor Rule forecast by modeling serial correlation in the policy deviations. The combined model therefore captures both the systematic and dynamic elements of the Federal Reserve’s interest rate decisions.
+
+```{r Task 6.3 combine models and table, echo=FALSE, include=FALSE, warning=FALSE}
+
+ols_pred_train <- fitted(ols_model)
+ols_pred_test  <- predict(ols_model, newdata = test_df)
+
+# ARIMA fitted residuals (train) and residual forecasts (test)
+resid_fit_train <- fitted(auto_arima_resid)
+
+h_test <- nrow(test_df)
+resid_fc_test <- forecast(auto_arima_resid, h = h_test)$mean
+
+# combined predictions
+combined_pred_train <- ols_pred_train + resid_fit_train
+combined_pred_test <- ols_pred_test + as.numeric(resid_fc_test)
+
+# RMSEs Taylor-only
+ols_rmse_train <- sqrt(mean((train_df$FEDFUNDS_hampel - ols_pred_train)^2))
+ols_rmse_test <- sqrt(mean((test_df$FEDFUNDS_hampel - ols_pred_test)^2))
+
+# RMSEs: Taylor combined w/ ARIMA
+combined_rmse_train <- sqrt(mean((train_df$FEDFUNDS_hampel - combined_pred_train)^2))
+combined_rmse_test  <- sqrt(mean((test_df$FEDFUNDS_hampel  - combined_pred_test)^2))
+
+# ECM (from above)
+ecm_pred_train <- fitted(ecm_model_train)
+ecm_rmse_train <- sqrt(mean((infl_data_tsbl_ecm_train$d_it - ecm_pred_train)^2, na.rm = TRUE))
+
+# table making 
+comparison <- tibble(
+  Model = c("Taylor Rule (OLS)",
+            "ECM",
+            "Taylor - ARIMA Combined"),
+  Train_RMSE = c(ols_rmse_train,
+                 ecm_rmse_train,
+                 combined_rmse_train),
+  Test_RMSE  = c(ols_rmse_test,
+                 ecm_rmse,        
+                 combined_rmse_test)
+)
+
+comparison
+```
+
+The table below compares the RMSE for the three models across the training and test sets:
+
+| Model                 | Train RMSE | Test RMSE |
+|:----------------------|-----------:|----------:|
+| Taylor Rule (OLS)     |       3.30 |      0.93 |
+| ECM                   |       0.96 |      1.27 |
+| Taylor–ARIMA Combined |       1.66 |      4.00 |
+
+The **Taylor Rule (OLS)** model provides a relatively loose in-sample fit (RMSE $\approx 3.3$) but performs best on the **test set** (RMSE $\approx 0.93$). This suggests that while the OLS model does not fully capture short-term fluctuations during the estimation period, it generalizes reasonably well for the more stable post-2022 period, when macroeconomic volatility was subdued.
+
+The **Error Correction Model (ECM)** achieves the lowest training RMSE ($\approx 0.96$), implying that differencing and inclusion of lagged disequilibrium terms successfully capture most short-run adjustments within the training sample. However, its slightly higher out-of-sample RMSE ($\approx 1.27$) indicates mild overfitting—expected since the ECM optimizes within-sample dynamic correction rather than long-horizon prediction.
+
+By contrast, the **Taylor–ARIMA Combined** model shows improved in-sample residual structure (RMSE $\approx 1.66$) but a larger out-of-sample RMSE ($\approx 4.00$). This outcome arises because the ARIMA component ($\text{ARIMA}(2,1,3)$) is tuned to capture serial correlation in historical policy deviations ($\hat{\varepsilon}_t$), which were highly volatile during the 1980–2020 training period.\
+When applied to the test period-marked by comparatively stable rates, the ARIMA extrapolation amplifies noise, yielding over-dispersion in forecasts. Which allows us to surmise that while ARIMA enhances the *in-sample* dynamics by filtering autocorrelation, it reduces *out-of-sample robustness* under regime stability.
+
+In economic terms, this suggests that the **Taylor Rule itself remains structurally sound** for recent policy behavior, and that much of the autocorrelation observed historically reflects **temporary shocks or regime-specific persistence**. The combined model’s poorer forecast performance emphasizes the importance of *model parsimony* when the policy environment changes: the additional ARIMA layer, while statistically valid, can misinterpret macroeconomic calm as signal.
+
+The final combined forecast equation is:
+
+$$
+\widehat{i}_t^{\,\text{combined}}
+=
+\widehat{i}_t^{\,\text{Taylor}}
++
+\widehat{\varepsilon}_t^{\,\text{ARIMA}},
+$$
+
+where $\hat{i}_t^{\text{Taylor}}$ represents the structural component implied by inflation and output gaps, and $\hat{\epsilon}_t^{\text{ARIMA}}$ captures the dynamic residual correction term. Overall, the findings highlight that post-2020 policy behavior is best captured by the **canonical Taylor Rule** rather than by more complex dynamic extensions.
+
+# Task 7: VAR Modeling
+
+We treat $\{i_t,\; (\pi_t-\pi^*),\; \text{OutputGap}_t\}$ as a joint system and estimate a VAR on **levels**.
+
+### 7.1 Estimate, Forecast, and Granger Causality
+
+```{r Task 7.1, echo=FALSE, include=FALSE}
+#install.packages("vars")
+library(vars)
+library(tseries)
+library(urca)
+
+# I need to do this yet again!
+train_df <- train_df %>%
+  dplyr::select(date,
+                i = FEDFUNDS_hampel,
+                infl_gap = inflation_gap,
+                out_gap = output_gap) %>%
+  dplyr::arrange(date) %>%
+  dplyr::distinct(date, .keep_all = TRUE) %>%
+  dplyr::mutate(dplyr::across(c(i, infl_gap, out_gap), as.numeric)) %>%
+  tidyr::drop_na()
+
+test_df <- test_df %>%
+  dplyr::select(date,
+                i = FEDFUNDS_hampel,
+                infl_gap = inflation_gap,
+                out_gap  = output_gap) %>%
+  dplyr::arrange(date) %>%
+  dplyr::distinct(date, .keep_all = TRUE) %>%
+  dplyr::mutate(dplyr::across(c(i, infl_gap, out_gap), as.numeric)) %>%
+  tidyr::drop_na()
+
+start_y <- lubridate::year(min(train_df$date))
+start_q <- lubridate::quarter(min(train_df$date))
+y_train_ts <- ts(as.matrix(train_df[, c("i","infl_gap","out_gap")]),
+                 start = c(start_y, start_q), frequency = 4)
+
+# VAR lag selection and estimation 
+lag_sel <- VARselect(y_train_ts, lag.max = 8, type = "const")
+p_opt <- lag_sel$selection[["AIC(n)"]]
+var_fit <- VAR(y_train_ts, p = p_opt, type = "const")
+summary(var_fit)
+
+# In-sample fit and RMSE
+var_fitted <- fitted(var_fit)
+var_actual <- y_train_ts[(p_opt + 1):nrow(y_train_ts), ]
+
+rmse <- function(a, f) sqrt(mean((a - f)^2))
+rmse_train <- c(
+  i = rmse(var_actual[, "i"], var_fitted[, "i"]),
+  infl_gap = rmse(var_actual[, "infl_gap"], var_fitted[, "infl_gap"]),
+  out_gap  = rmse(var_actual[, "out_gap"],  var_fitted[, "out_gap"])
+)
+
+# Out-of-sample RMSE
+h_test <- nrow(test_df)
+var_fc <- predict(var_fit, n.ahead = h_test, ci = 0.90)
+fc_vals <- var_fc$fcst
+var_pred_test <- sapply(fc_vals, function(x) x[, "fcst"])
+
+rmse_test <- c(
+  i = rmse(test_df$i, var_pred_test[, "i"]),
+  infl_gap = rmse(test_df$infl_gap, var_pred_test[, "infl_gap"]),
+  out_gap  = rmse(test_df$out_gap,  var_pred_test[, "out_gap"])
+)
+
+rmse_tbl <- tibble(
+  Variable   = c("i","infl_gap","out_gap"),
+  Train_RMSE = rmse_train,
+  Test_RMSE  = rmse_test
+)
+rmse_tbl
+
+gc_infl  <- causality(var_fit, cause = "infl_gap")
+gc_out   <- causality(var_fit, cause = "out_gap")
+gc_joint <- causality(var_fit, cause = c("infl_gap","out_gap"))
+
+gc_infl
+gc_out
+gc_joint
+
+```
+
+A Vector Autoregression (VAR) was estimated over the system $\{ i_t, (\pi_t - \pi^*), \text{OutputGap}_t \}$ using quarterly data from 1980 Q1 to 2022 Q4. The optimal lag length, selected using the Akaike Information Criterion, was eight, implying two years of dynamic feedback among the federal funds rate, inflation gap, and output gap. The resulting model exhibited high explanatory power with $R^2_i = 0.986$, $R^2_{\pi \text{gap}} = 0.44$, and $R^2_{\text{out gap}} = 0.93$, showing that past lags explain most variation in both the policy rate and the output gap, while the inflation gap remains more stochastic. All characteristic roots lie within the unit circle, confirming that the system is dynamically stable and suitable for forecasting.
+
+The model’s predictive accuracy was assessed through in-sample and out-of-sample RMSEs. In the training data, RMSE values were 0.388 for $i_t$, 0.0032 for $(\pi_t - \pi^*)$, and 0.479 for the output gap. The corresponding test RMSEs were 0.761, 0.0035, and 1.728, respectively. The model captures the dynamics of the federal funds rate with relatively low error, while the inflation gap is predicted with remarkable precision and the output gap displays greater volatility in the test set, particularly in the post-pandemic period. Compared with the Taylor Rule (OLS) and Error-Correction (ECM) specifications, the VAR provides a richer multivariate framework at the cost of added complexity. Its predictive accuracy for $i_t$ sits between the ECM and Taylor–ARIMA combined models, indicating a balanced trade-off between fit and generalization.
+
+Causality testing further illuminates the system’s internal dynamics. The Granger causality test, with the null hypothesis that inflation and output gaps do not Granger-cause $i_t$, yielded $F(16,414) = 1.4004$ and $p = 0.137$, leading to a failure to reject the null. This suggests that lagged information about inflation and real activity does not significantly improve forecasts of the policy rate once its own history is included. However, the instantaneous causality test produced $\chi^2(2) = 20.48$ with $p < 0.001$, implying strong contemporaneous correlations among $\{ i_t, (\pi_t - \pi^*), \text{OutputGap}_t \}$. These results support the interpretation that monetary policy actions are largely contemporaneous with prevailing macroeconomic conditions, consistent with a responsive but forward-looking central bank reaction function.
+
+Which indicates strong contemporaneous interaction among $\{i_t, (\pi_t - \pi^*), \text{OutputGap}_t\}$, consistent with the idea that the Fed adjusts rates within the same quarter in response to inflation and output signals. Together, these results imply that policy moves are largely contemporaneous with macroeconomic conditions rather than driven by lagged information.
+
+```{r Tsk 7.2, echo=FALSE, include=TRUE}
+irf_g_infl_to_all <- irf(
+  var_fit,
+  impulse  = "infl_gap",
+  response = c("i","infl_gap","out_gap"),
+  n.ahead  = 8,
+  boot = TRUE,
+  ci = 0.90,
+)
+
+irf_g_out_to_all <- irf(
+  var_fit,
+  impulse  = "out_gap",
+  response = c("i","infl_gap","out_gap"),
+  n.ahead  = 8,
+  boot = TRUE,
+  ci = 0.90,
+)
+
+p1 <- plot(irf_g_infl_to_all)
+p2 <- plot(irf_g_out_to_all)
+
+p1 + p2
+```
+
+Next, Impulse Response Functions were generated from the fitted VAR to trace the system’s dynamic adjustment to one-time shocks. The IRFs describe how each variable in $\{ i_t, (\pi_t - \pi^*), \text{OutputGap}_t \}$ evolves following a temporary disturbance in another variable. The responses were computed over eight quarters with 90% bootstrapped confidence intervals based on 100 replications.
+
+A positive shock to the inflation gap $(\pi_t - \pi^*)$ induces an upward response in the federal funds rate $i_t$ over subsequent quarters, consistent with a tightening of monetary policy in reaction to higher inflation. The increase in $i_t$ is gradual during the first year and stabilizes thereafter, indicating a sustained but controlled policy adjustment. The output gap rises slightly in the short run, suggesting a temporary expansion before the contractionary impact of higher interest rates dampens activity. The inflation gap itself displays mild mean reversion, implying that inflation expectations remain anchored despite the initial shock.
+
+When the system experiences a positive disturbance in the output gap, the interest rate again rises for approximately two years, reflecting the Federal Reserve’s response to overheating conditions in the real economy. Inflation reacts modestly and within the confidence interval, indicating weak inflationary spillovers from output movements. The output gap gradually converges back to equilibrium within six to eight quarters, demonstrating a stable adjustment path and the self-correcting nature of the system.
+
+Together, the impulse response and causality analyses reveal a coherent monetary-policy transmission mechanism. Inflation and output shocks generate policy-rate responses that are persistent yet mean-reverting, indicating the stabilizing role of monetary policy. The presence of strong instantaneous causality but weak Granger causality suggests that rate adjustments occur in response to current economic information rather than lagged data. Overall, the VAR and IRF evidence reinforce the central principle of the Taylor Rule in a multivariate dynamic setting: the federal funds rate systematically responds to deviations in inflation and real activity to guide the economy back toward equilibrium.
+
+Relative to the Taylor-ARIMA combined model from Task 6, the VAR framework provides a more structural and interactive representation of monetary policy behavior. While the ARIMA extension improved short-run forecast precision by modeling residual autocorrelation in the Taylor Rule, it remained a univariate correction focused solely on $i_t$. The VAR, by contrast, endogenizes inflation and the output gap, allowing policy reactions and macroeconomic feedback to emerge jointly within a unified system. The ARIMA-based approach excels at capturing serial dependence but lacks cross-variable dynamics; the VAR overcomes that limitation by explicitly linking shocks across equations. Although the Taylor-ARIMA model achieved a lower test RMSE, the VAR reveals the economic mechanism underlying those patterns: interest-rate adjustments are immediate and persistent responses to contemporaneous inflation and output fluctuations. Thus, the VAR complements the previous models by translating statistical fit into a richer narrative of policy interaction and macroeconomic stabilization.
+
+# Appendix
