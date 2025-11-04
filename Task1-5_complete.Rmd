@@ -115,7 +115,7 @@ gdp_merged <- gdp_merged %>% rename(realtime_start = realtime_start.x, realtime_
 output_gap <- gdp_merged %>% select(date, series_id, value, realtime_start, realtime_end)
 ```
 
-```{r Task 1.3.1 FFER Plot + Summary Statistics, echo=FALSE, include=TRUE, warning=FALSE, fig.align="center", fig.height=4, warning=FALSE}
+```{r Task 1.3.1 FFER Plot + Summary Statistics, echo=FALSE, include=TRUE, warning=FALSE, warning=FALSE, fig.height=3, fig.width=6, fig.align='center'}
 
 ffer_full %>% 
   ggplot(aes(x = date, y = value)) + 
@@ -161,7 +161,7 @@ One may note a few key historical events that appear in the graph:
 
 
 
-```{r Task 1.3.2 PCEPI Plot + Summary Statistics, echo=FALSE, include=TRUE, warning=FALSE}
+```{r Task 1.3.2 PCEPI Plot + Summary Statistics, echo=FALSE, include=TRUE, warning=FALSE, fig.height=3, fig.width=6, fig.align='center'}
 library(ggplot2)
 library(patchwork)
 
@@ -205,7 +205,7 @@ PCEPI (Inflation) shows events that are related to events that spurred the FFER 
 The Personal Consumption Expenditures Price Index (PCEPI) provides the measure of inflation used in this analysis and serves as the nominal anchor of the Taylor Rule framework. Over the 1980–2024 sample, the index exhibits a mean level of approximately $78.6$, with a variance of $501.5$ and a standard deviation of $22.4$, across $182$ quarterly observations. This long-run upward trend reflects the cumulative nature of price growth, while the first-differenced or percentage-change series reveals cyclical fluctuations in inflation dynamics. Periods of particularly high inflation are evident in the early 1980s, consistent with the post–oil-shock stagflation era that motivated aggressive monetary tightening. In contrast, near-zero inflation during the 2008–2015 period reflects deflationary pressures from the global financial crisis. More recently, inflation accelerated sharply around 2020–2022 following the pandemic-induced supply and demand shocks. These fluctuations correspond closely to shifts in the federal funds rate observed earlier, confirming that PCE inflation pressures have historically been a central driver of U.S. monetary policy adjustments.
 
 
-```{r Task 1.3.3 GDP Plot + Summary Statistics, echo=FALSE, include=TRUE, warning=FALSE}
+```{r Task 1.3.3 GDP Plot + Summary Statistics, echo=FALSE, include=TRUE, warning=FALSE, fig.height=3, fig.width=7}
 # Do regular GDP, POT GDP, and output gap
 
 p1 <- gdp_full %>% 
@@ -354,10 +354,9 @@ p4 <- pot_gdp_full %>%
                      name = "Legend")
 ```
 
-```{r, echo=FALSE, include=TRUE, warning=FALSE, fig.width=10}
+```{r, echo=FALSE, include=TRUE, warning=FALSE, fig.height=5, fig.width=7}
 
-p1 + p2
-p3 + p4
+(p1 | p2) / (p3 | p4)
 ```
 
 ```{r, echo=FALSE, include=TRUE}
@@ -368,10 +367,9 @@ output_gap$value <- (gdp_full$hampel_val - pot_gdp_full$hampel_val) * 100 / pot_
 
 ### Detection 
 
-```{r Task 2.3.1 FFER Seasonal Plots + QS Test, echo=FALSE, include=TRUE, fig.width=10}
+```{r Task 2.3.1 FFER Seasonal Plots + QS Test, echo=FALSE, include=TRUE, fig.height=10, fig.width=7}
 
 ffer_full <- ffer_full %>% mutate(q = quarter(date))
-
 
 ffer_full$q_factor <- factor(ffer_full$q, levels = c("1", "2", "3", "4"))
 
@@ -390,9 +388,7 @@ p4 <- ffer_full %>% filter(q == 3) %>% ggplot(aes(x=date, y=hampel_val)) + geom_
 
 p5 <- ffer_full %>% filter(q == 4) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "FFER Q4", x = "Date", y = "Value")
 
-p1
-p2 + p3
-p4 + p5
+p1 / (p2 | p3) / (p4 | p5)
 ```
 ```{r echo=FALSE, include=FALSE}
 start_year <- 1980
@@ -406,7 +402,7 @@ seastests::qs(ffer_ts)
 The QS test for seasonality applied to the Federal Funds Effective Rate (FFER) produced a test statistic of 0 with a p-value of 1. This result provides no evidence of seasonality in the FFER series. In other words, the Federal Funds Rate does not exhibit systematic quarterly or annual seasonal fluctuations. This is consistent with the institutional nature of monetary policy decisions—interest rate adjustments occur in response to macroeconomic conditions rather than regular seasonal cycles. Consequently, no seasonal adjustment or differencing is necessary for the FFER series before modeling.
 
 
-```{r PCEPI Seasonal Plots + QS Test, echo=FALSE, include=TRUE, warning=FALSE}
+```{r PCEPI Seasonal Plots + QS Test, echo=FALSE, include=TRUE, warning=FALSE, fig.height=10, fig.width=7}
 pcepi_full <- pcepi_full %>% mutate(q = quarter(date))
 
 pcepi_full$q_factor <- factor(pcepi_full$q, levels = c("1", "2", "3", "4"))
@@ -426,9 +422,7 @@ p4 <- pcepi_full %>% filter(q == 3) %>% ggplot(aes(x=date, y=hampel_val)) + geom
 
 p5 <- pcepi_full %>% filter(q == 4) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "PCEPI Q4", x = "Date", y = "Value")
 
-p1
-p2 + p3
-p4 + p5 
+p1 / (p2 | p3) / (p4 | p5)
 ```
 
 ```{r, echo=FALSE, include=FALSE}
@@ -442,7 +436,7 @@ seastests::qs(pcepi_ts)
 
 The QS test in the quarterly PCEPI inflation series produced a statistic of 16.15 with a p-value of 0.00031, indicating statistically significant seasonal effects. Therefore, the raw series exhibits recurring within-year variation, justifying the use of seasonal differencing or seasonal adjustment before fitting ARIMA-type models.
 
-```{r GDP Seasonal Plots, echo=FALSE, include=TRUE, warning=FALSE, fig.width=10}
+```{r GDP Seasonal Plots, echo=FALSE, include=TRUE, warning=FALSE, fig.height=10, fig.width=7}
 gdp_full <- gdp_full %>% mutate(q = quarter(date))
 
 gdp_full$q_factor <- factor(gdp_full$q, levels = c("1", "2", "3", "4"))
@@ -462,9 +456,7 @@ p4 <- gdp_full %>% filter(q == 3) %>% ggplot(aes(x=date, y=hampel_val)) + geom_l
 
 p5 <- gdp_full %>% filter(q == 4) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "GDP Q4", x = "Date", y = "Value")
 
-p1 
-p2 + p3
-p4 + p5
+p1 / (p2 | p3) / (p4 | p5)
 ```
 
 ```{r GDP QS Test, echo=FALSE, include=FALSE, warning=FALSE, fig.width=10}
@@ -480,7 +472,7 @@ Here, our QS seasonality test for the Real GDP series yielded a test statistic o
 
 This is consistent with standard macroeconomic data practices: most official GDP series are *seasonally adjusted annualized rates (SAAR)*, meaning any regular quarterly effects have already been filtered out by the data provider.
 
-```{r GDPPOT Seasonal Plots, echo=FALSE, include=TRUE, warning=FALSE}
+```{r GDPPOT Seasonal Plots, echo=FALSE, include=TRUE, warning=FALSE, fig.height=10, fig.width=7}
 pot_gdp_full <- pot_gdp_full %>% mutate(q = quarter(date))
 
 pot_gdp_full$q_factor <- factor(pot_gdp_full$q, levels = c("1", "2", "3", "4"))
@@ -500,12 +492,10 @@ p4 <- pot_gdp_full %>% filter(q == 3) %>% ggplot(aes(x=date, y=hampel_val)) + ge
 
 p5 <- pot_gdp_full %>% filter(q == 4) %>% ggplot(aes(x=date, y=hampel_val)) + geom_line() + labs(title = "GDPPOT Q4", x = "Date", y = "Value")
 
-p1 
-p2 + p3
-p4 + p5
+p1 / (p2 | p3) / (p4 | p5)
 ```
 
-```{r GDPPOT QS Test, echo=FALSE, include=FALSE}
+```{r GDPPOT QS Test, echo=FALSE, include=FALSE, warning=FALSE}
 start_year <- 1980
 start_quarter <- 1
 
@@ -539,7 +529,7 @@ pot_gdp_full$s_adj_val <- final(pot_gdp_fit)
 ```
 
 
-```{r, echo=FALSE, include=TRUE, fig.width=10}
+```{r, echo=FALSE, include=TRUE, fig.height=3, fig.width=9, warning=FALSE, message=FALSE}
 p1 <- pot_gdp_full %>%
   ggplot(aes(x = date)) + 
   geom_line(aes(y = s_adj_val, color = "Seasonally Adjusted")) +
@@ -640,7 +630,7 @@ infl_data_tsbl_test <- infl_data_tsbl %>%
   filter(date > yearquarter("2022 Q4"))
 ```-->
 
-```{r}
+```{r, include=TRUE, warning=FALSE, echo=FALSE, message=FALSE}
 vars <- names(select(infl_data_tsbl_train, where(is.numeric)))
 
 results <- data.frame(
@@ -671,7 +661,7 @@ Using the General to Specific approach, we first evaluate for drift and trend te
 
 These test results suggest that the PCEPI and GDPC variables should be differenced before before use in modeling, to avoid spurious regression. The GDPPOT variable is trend-stationary because it does not contain a unit-root but it does contain a deterministic trend. In order to capture the explanatory power of the variable, GDPPOT_s_adj should not be differenced.
 
-```{r}
+```{r, include=FALSE, warning=FALSE, echo=FALSE}
 infl_data_tsbl_train <- infl_data_tsbl_train %>% 
   mutate(
     d_FEDFUNDS_hampel = difference(FEDFUNDS_hampel),
@@ -681,11 +671,11 @@ infl_data_tsbl_train <- infl_data_tsbl_train %>%
   )
 ```
 
-```{r}
+```{r, include=TRUE, warning=FALSE, echo=FALSE}
 adf.test(infl_data_tsbl_train$d_PCEPI_s_adj)
 ```
 
-```{r}
+```{r, include=TRUE, warning=FALSE, echo=FALSE}
 adf.test(infl_data_tsbl_train$d_GDPC1_hampel)
 ```
 
@@ -718,13 +708,13 @@ This means that the additional variables identified over the ADF only appear non
 
 # Task 4
 
-```{r}
+```{r, include=TRUE, warning=FALSE, echo=FALSE}
 taylor_mod <- infl_data_tsbl_train %>%
   model(tlsm = TSLM(FEDFUNDS_hampel ~ inflation_gap + output_gap))
 report(taylor_mod)
 ```
 
-```{r}
+```{r, include=TRUE, warning=FALSE, echo=FALSE, fig.height=5, fig.width=7, message=FALSE}
 taylor_mod %>%
   gg_tsresiduals()
 ```
@@ -737,19 +727,19 @@ With this model, the inflation gap estimate is significant with a value of 406.8
 
 The Autocorrelation plots for this model shows that the residuals are significant across all lags. This shows that there is additional information that is not captured with the model, as the residuals are not white noise.
 
-```{r}
+```{r, include=FALSE, warning=FALSE, echo=FALSE}
 accuracy(taylor_mod)$RMSE
 ```
 
-```{r}
+```{r, include=FALSE, warning=FALSE, echo=FALSE}
 taylor_fc <- forecast(taylor_mod, new_data = infl_data_tsbl_test)
 ```
 
-```{r}
+```{r, include=FALSE, warning=FALSE, echo=FALSE}
 accuracy(taylor_fc, infl_data_tsbl_test)$RMSE
 ```
 
-```{r}
+```{r, include=TRUE, warning=FALSE, echo=FALSE}
 autoplot(taylor_fc, infl_data_tsbl_train) +
   labs(
     title = "Taylor Rule: Fitted and Forecasted Fed Funds Rate",
@@ -769,14 +759,14 @@ This difference may be attributed to the relative calm in the market during the 
 
 ## 5.1: Cointegration Test (5 Points)
 
-```{r}
+```{r, echo=FALSE, include=FALSE}
 ## Tom Commented this code after creating the model in task 4
 # taylor_mod <- lm(FEDFUNDS_hampel ~ inflation_gap + output_gap, 
 #                  data = infl_data_tsbl_train)
 # summary(taylor_mod)
 ```
 
-```{r}
+```{r, include=FALSE, echo=FALSE}
 
 # Anthony comment - theres an error here. `taylor_mod` above is a MABLE not a numeric vector. Need the residual as a numeric vector...
 
@@ -795,9 +785,15 @@ adf.test(taylor_resid)
 
 Since the p value is 0.01024 and less than 0.05, we reject the null hypothesis that the series has a unit root. This means that the residuals are stationary and there is a long-run equilibrium relationship.
 
+Next, we want to investigate whether there is a long-run equilibrium for the basic Taylor rule model. Since the Federal Reserve consistently adjusts the federal funds rate in response to changes in inflation and the output gap, there could be a mean-reverting relationship in the long run. To test this, we will perform a Cointegration Test, specifically the Engle-Granger two-step test. 
+
+To perform this test, we take our Taylor model that we fit previously and extract the residuals. Next, we perform an ADF test on the residuals. Looking at the results, the ADF statistics are strongly negative and the p-values are below 0.05 for most specifications (with and without drift or trend). This indicates that we can reject the null hypothesis of a unit root. In other words, the residuals are stationary. Therefore, we conclude that there exists a long-run equilibrium relationship between the federal funds rate, the inflation gap, and the output gap. This means
+that the variables are cointegrated, satisfying the condition necessary for estimating an Error
+Correction Model (ECM).
+
 ## 5.2: Estimating the ECM via OLS (5 Points)
 
-```{r}
+```{r, echo=FALSE, include=FALSE}
 # full residuals to add back to tsibble
 long_run_model <- lm(FEDFUNDS_hampel ~ inflation_gap + output_gap, 
                      data = infl_data_tsbl)
@@ -818,26 +814,37 @@ infl_data_tsbl_ecm_test <- infl_data_tsbl_ecm %>%
   filter(date > yearquarter("2022 Q4"))
 ```
 
-```{r}
+```{r, include=TRUE, echo=FALSE}
 ecm_model <- lm(d_it ~ d_infl_gap + d_output_gap + lag_resid, 
                 data = infl_data_tsbl_ecm)
 summary(ecm_model)
 ```
 
+In an ECM model, we are able to capture both the short-run adjustments and the long-run equilibrium relationship between economic variables. Specifically, the model allows us to separate temporary fluctuations from the underlying equilibrium path implied by economic theory. Deviations from the long-run equilibrium (captured by the lagged residual term) influence short-run changes in the dependent variable, showing how the system “corrects” itself over time. To estimate the ECM, we calculate the change in interest rate ($d_it$), the change in output gap ($d_output_gap$), the change in inflation gap ($d_Inflation_gap$), and the equilibrium error ($lag_resid$). The first three variables can be directly calculated using our data. The equilibrium error can be calculated by first fitting a long-run regression (the basic Taylor Rule model) to extract the residuals and then using those values as the lagged adjustment term.
+
+To estimate the ECM, we calculate the change in interest rate ($d_{it}$), the change in output gap ($d_output_gap$), the change in inflation gap ($d_Inflation_gap$), and the equilibrium error ($lag_resid$). The first three variables can be directly calculated using our data. The equilibrium error can be calculated by first fitting a long-run regression (the basic Taylor Rule model) to extract the residuals and then using those values as the lagged adjustment term. Our final ECM model is specified as:
+$$
+\Delta i_t = \gamma_0 + \gamma_1 \Delta(\pi_t - \pi^*) + \gamma_2 \Delta(\text{Output Gap}_t) + \phi \left[ i_{t-1} - \beta_1(\pi_{t-1} - \pi^*) - \beta_2(\text{Output Gap}_{t-1}) \right] +\varepsilon_t
+$$
+We note that the coefficient $\phi$ captures the speed of adjustment and is typically negative, indicating that when the interest rate deviates from its long-run equilibrium, it adjusts in the next period to restore balance. 
+
+After fitting our model, we get the following results. The coefficient on the lagged residual term ($lag_resid$) is -0.061, which is negative and statistically significant. This confirms the presence of an error correction mechanism, indicating that when the federal funds rate deviates from its long-run equilibrium, it adjusts by about 6% in the following quarter to restore equilibrium. The coefficient on the change in the output gap ($d_output_gap$) is 0.422 and also significant, suggesting that short-run movements in the output gap have a meaningful positive effect on changes in the interest rate. In contrast, the coefficient on the change in the inflation gap ($d_infl_gap$) is positive but statistically insignificant, implying that short-run changes in inflation do not have a significant immediate impact on interest rate adjustments.
+
 ## 5.3: Compare ECM Forecasts (5 Points)
 
-```{r}
+```{r, echo=FALSE, include=FALSE}
 ecm_model_train <- lm(d_it ~ d_infl_gap + d_output_gap + lag_resid, 
                 data = infl_data_tsbl_ecm_train)
 summary(ecm_model_train)
 ```
 
-```{r}
+
+```{r, echo=FALSE, include=FALSE}
 # forecast d_it
 ecm_fc <- forecast(ecm_model_train, newdata = as.data.frame(infl_data_tsbl_ecm_test))
 ```
 
-```{r}
+```{r, echo=FALSE, include=TRUE, warning=FALSE, message=FALSE}
 d_hat <- ecm_fc$mean
 
 # Convert to level forecasts
@@ -854,8 +861,7 @@ ecm_rmse <- sqrt(mean((infl_data_tsbl_ecm_test$FEDFUNDS_hampel - i_hat)^2, na.rm
 ecm_rmse
 ```
 
-```{r}
-# Anthony comment - this is not worrking because taylor_mod is a table not numeric 
+```{r, echo=FALSE, include=TRUE, warning=FALSE, message=FALSE}
 # ols_fc <- forecast(taylor_mod, newdata = infl_data_tsbl_test)
 # ols_pred <- ols_fc$mean
 # ols_rmse <- sqrt(mean((infl_data_tsbl_test$FEDFUNDS_hampel - ols_pred)^2, na.rm = TRUE))
@@ -875,11 +881,11 @@ ols_rmse <- sqrt(mean(
 ols_rmse
 ```
 
-The ECM model performs slightly worse with a higher RMSE.
+To test our model’s performance, we train the ECM model on data from 1980Q1 to 2022Q4 and forecast from 2023Q1 to 2024Q4. Our metric will be the Root Mean Squared Error (RMSE). To get the RMSE value from our ECM model, we have to convert the predicted $d_it$ values back to the level forecasts of the federal funds rate. This is done by cumulatively adding the predicted changes to the last observed value of the interest rate from the training period. Once we obtain these level forecasts, we can directly compare them to the actual observed federal funds rate in the test period to compute the RMSE. Overall, the ECM model performs slightly worse, with an RMSE of 1.272986 compared to 0.9260019 for the baseline OLS-based Taylor Rule model. While we might expect the ECM to have a lower RMSE due to its ability to capture both short-run dynamics and long-run equilibrium, this result likely reflects changes in Federal Reserve behavior during 2023 to 2024. Because our model was trained on data from 1980 to 2022, it may not fully capture these recent shifts, making the ECM forecasts less predictable in this period.
 
 # Task 6: ARIMA Modeling of Taylor Rule Errors
 
-```{r Task 6.1 Taylor Rule prediction - OLS model, echo=FALSE, include=FALSE}
+```{r Task 6.1 Taylor Rule prediction OLS model, echo=FALSE, include=FALSE}
 
 # Rebuilding train and test for this task for posterity sake 
 train_df <- infl_data_tsbl_train %>%
@@ -920,13 +926,7 @@ summary(pp_test)
 
 ```
 
-To build on work completed above, we provide additional stationarity tests on the residuals. Here, applied three complementary unit-root diagnostics to the Taylor Rule residuals, denoted $\{\hat{\varepsilon}_t\}$. The **KPSS** test (null $H_0$: stationarity) indicates that the series is stationary in levels once a deterministic trend is allowed. Specifically, the level-stationarity version yields $p \ge 0.10$, and the trend-stationarity version also yields $p \ge 0.10$, while the “with drift, no trend” variant rejects with $p \le 0.01$. Taken together, these results suggest that $\hat{\varepsilon}_t$ is **trend–stationary** rather than containing a stochastic trend: deviations are mean-reverting around a deterministic component. Formally, we fail to reject stationarity for $\hat{\varepsilon}_t = \mu + \tau t + u_t$ with $u_t$ covariance-stationary.
-
-Allowing for an endogenous structural change, the **Zivot–Andrews** test rejects the unit-root null once a single break in intercept and trend is permitted. The test statistic is $-7.09$, which is more negative than the 1% critical value ($-5.57$), implying stationarity conditional on one regime shift. The estimated break occurs early in the sample (position $\approx 9$), consistent with a Volcker-era policy shift [1]. Economically, this means the Taylor Rule relationship is stable within regimes but parameters likely changed once, so that $\hat{\varepsilon}_t$ behaves as a stationary process after accounting for that break.
-
-The **Phillips–Perron** test, which shares the ADF null $H_0$ unit root but is robust to serial correlation and heteroskedasticity, also rejects nonstationarity decisively (Z–tau $=-6.41$, beyond the 1% critical value). This corroborates that the residual process does not harbor a stochastic trend once inflation and output gaps are included on the right-hand side.
-
-Overall, the three diagnostics are mutually consistent: $\hat{\varepsilon}_t$ is best characterized as **stationary**, possibly around a deterministic trend and with evidence of a **single structural break**. This justifies modeling the unexplained component with a low-order ARIMA on the residuals. However, we take the route often taken in practice, where differencing once (ARIMA with $d=1$) can act as a convenient device to remove the deterministic drift and any slow-moving break-induced level shift, yielding a stationary innovation process for forecasting. Consequently, the combined forecast we report later follows 
+In our appendix, we provide additional analysis on the stationarity of the residuals we utilize for modeling, with three additional diagnostics that are mutually consistent: $\hat{\varepsilon}_t$ is best characterized as **stationary**, possibly around a deterministic trend and with evidence of a **single structural break**. However, when applying the auto ARIMA model, we note a first difference is utilized, which we explore with visual analysis in our technical appendix. Our analysis justifies modeling the unexplained component with a low-order ARIMA on the residuals and we take the route often taken in practice, where differencing once (ARIMA with $d=1$) can act as a convenient device to remove the deterministic drift and any slow-moving break-induced level shift, yielding a stationary innovation process for forecasting. Consequently, the combined forecast we report later follows:
 
 $$
 \widehat{i}_t^{\,\text{combined}}
@@ -939,8 +939,29 @@ $$
 where $\widehat{i}_t^{\,\text{Taylor}}$ is the OLS Taylor Rule fit and $\widehat{\varepsilon}_t^{\,\text{ARIMA}}$ is the ARIMA forecast of the residual process that is stationary within regimes.
 
 
+```{r 6.1 plots, include=FALSE, echo=FALSE, warning=FALSE}
 
-```{r Task 6.2 ARIMA forecase of the residulas, echo=FALSE, include=TRUE}
+actual_df <- bind_rows(train_df, test_df)
+
+ols_plot <- data.frame(
+date = actual_df$date,
+actual = actual_df$FEDFUNDS_hampel,
+fitted = c(fitted(ols_model), rep(NA, nrow(test_df))),
+forecast = c(rep(NA, nrow(train_df)), predict(ols_model, newdata = test_df))
+) %>%
+ggplot(aes(x = date)) +
+geom_line(aes(y = actual), color = "black", size = 0.8) +
+geom_line(aes(y = fitted), color = "steelblue", linetype = "solid") +
+geom_line(aes(y = forecast), color = "red", linetype = "dashed") +
+labs(title = "Taylor Rule (OLS): Actual vs Forecast",
+y = "Fed Funds Rate", x = "Year",
+caption = "Blue = fitted | Red dashed = forecast") +
+theme_minimal()
+
+```
+
+
+```{r Task 6.2 ARIMA forecase of the residulas, echo=FALSE, include=TRUE, warning=FALSE, message=FALSE, fig.width=7, fig.height=3}
 #some visualizations
 p1 <- autoplot(ols_resid_train_ts) +
   labs(title = "Taylor Rule Residuals (Train)",
@@ -960,7 +981,7 @@ p1 + p2
 ```
 
 
-```{r, echo=FALSE, include=FALSE, warning=FALSE}
+```{r, echo=FALSE, include=FALSE, warning=FALSE, message=FALSE, fig.width=7, fig.height=4}
 
 par(mfrow = c(1, 2))
 acf(ols_resid_train, main = "ACF of OLS Residuals (Train)", lag.max = 20)
@@ -999,23 +1020,11 @@ summary(auto_arima_resid)
 forecast::ndiffs(ols_resid_train)
 ```
 
-We begin by examining the residual series $\hat{\varepsilon}_t$ from the OLS Taylor Rule model.\
-The time‐series plot of residuals shows long memory and a clear downward drift until the early 2000s, followed by a period of volatility spikes (notably during the 2008 financial crisis and the COVID-19 period). This persistence suggests that the residuals are not white noise and may exhibit autocorrelation or a weak unit root, despite the test statistics on the non-differenced residuals above.
+We begin by examining the residual series $\hat{\varepsilon}_t$ from the OLS Taylor Rule model. The time‐series plot of residuals shows long memory and a clear downward drift until the early 2000s, followed by a period of volatility spikes (notably during the 2008 financial crisis and the COVID-19 period). This persistence suggests that the residuals are not white noise and may exhibit autocorrelation or a weak unit root, despite the test statistics on the non-differenced residuals above.
 
-The autocorrelation and partial autocorrelation plots (ACF and PACF) reinforce this observation.\
-The **ACF** decays slowly, indicating strong persistence in shocks, while the **PACF** shows a sharp cutoff after lag 1. This pattern is consistent with an autoregressive process of order one, AR(1), or potentially an ARIMA(1,1,0) structure with a single difference needed to achieve stationarity.\
-Such behavior implies that the shocks to the Taylor Rule equation tend to persist over multiple quarters, rather than dissipating immediately.
-
-After differencing the residuals, the time series of $\Delta \hat{\varepsilon}_t$ becomes mean-reverting with stable variance and no clear trend. Visually, this differenced series appears stationary, suggesting that one level of differencing ($d = 1$) is sufficient to remove the long-run component. Formally, both the **Augmented Dickey–Fuller (ADF)** and **KPSS** tests confirm this:\
-the ADF strongly rejects the null of a unit root (all $p \le 0.01$), while the KPSS fails to reject the null of stationarity ($p \ge 0.10$). Together, these imply that the differenced residuals are stationary.
-
-To formally capture this structure, we fit several ARIMA models. The AIC and BIC comparison indicates that higher-order mixed models outperform pure AR or MA specifications.\
-Specifically, **ARIMA(2,1,3)**, chosen by auto-ARIMA, achieves the lowest AIC ($AIC = 669.37$), outperforming all ARIMA models tested.
-
-The estimated parameters show significant AR and MA terms, confirming that both short-run momentum and shock effects are present.
+After differencing the residuals, the time series of $\Delta \hat{\varepsilon}_t$ becomes mean-reverting with stable variance and no clear trend. Visually, this differenced series appears stationary, suggesting that one level of differencing ($d = 1$) is sufficient to remove the long-run component. Formally, both the **Augmented Dickey–Fuller (ADF)** and **KPSS** tests confirm this: the ADF strongly rejects the null of a unit root (all $p \le 0.01$), while the KPSS fails to reject the null of stationarity ($p \ge 0.10$). Together, these imply that the differenced residuals are stationary. Specifically, **ARIMA(2,1,3)**, chosen by auto-ARIMA, achieves the lowest AIC ($AIC = 669.37$), outperforming all ARIMA models tested.
 
 In summary, the residual diagnostics show that:
-
 1.  The raw residuals $\hat{\varepsilon}_t$ are non-stationary, consistent with persistent policy shocks.\
 2.  First differencing yields stationary residuals $\Delta \hat{\varepsilon}_t$.\
 3.  The optimal model based on information criteria is **ARIMA(2,1,3)**, which balances autoregressive persistence with moving-average smoothing.
@@ -1027,7 +1036,7 @@ $$
 =
 \widehat{i}_t^{\,\text{Taylor}}
 +
-\widehat{\varepsilon}_t^{\,\text{ARIMA}},
+\widehat{\varepsilon}_t^{\,\text{ARIMA(2,1,3)}},
 $$
 
 where the ARIMA component refines the Taylor Rule forecast by modeling serial correlation in the policy deviations. The combined model therefore captures both the systematic and dynamic elements of the Federal Reserve’s interest rate decisions.
@@ -1075,6 +1084,7 @@ comparison <- tibble(
 comparison
 ```
 
+
 The table below compares the RMSE for the three models across the training and test sets:
 
 | Model                 | Train RMSE | Test RMSE |
@@ -1087,26 +1097,58 @@ The **Taylor Rule (OLS)** model provides a relatively loose in-sample fit (RMSE 
 
 The **Error Correction Model (ECM)** achieves the lowest training RMSE ($\approx 0.96$), implying that differencing and inclusion of lagged disequilibrium terms successfully capture most short-run adjustments within the training sample. However, its slightly higher out-of-sample RMSE ($\approx 1.27$) indicates mild overfitting—expected since the ECM optimizes within-sample dynamic correction rather than long-horizon prediction.
 
+```{r 6.2 plots, include=TRUE, echo=FALSE, warning=FALSE, message=FALSE, fig.width=7, fig.height=4}
+
+ecm_idx <- complete.cases(infl_data_tsbl_ecm_train[, c("d_it","d_infl_gap","d_output_gap","lag_resid")])
+ecm_fit_full <- rep(NA_real_, nrow(infl_data_tsbl_ecm_train))
+ecm_fit_full[ecm_idx] <- fitted(ecm_model_train)
+
+ecm_plot <- data.frame(
+  date   = infl_data_tsbl_ecm_train$date,
+  actual = infl_data_tsbl_ecm_train$d_it,
+  fitted = ecm_fit_full
+) %>%
+  ggplot(aes(x = date)) +
+  geom_line(aes(y = actual), color = "black") +
+  geom_line(aes(y = fitted), color = "darkgreen", linetype = "solid") +
+  labs(title = "Error-Correction Model: Actual vs Fitted",
+       y = "ΔFed Funds Rate", x = "Year",
+       caption = "Green = fitted adjustments") +
+  theme_minimal()
+
+combined_plot <- data.frame(
+date = actual_df$date,
+actual = actual_df$FEDFUNDS_hampel,
+fitted = c(combined_pred_train, rep(NA, nrow(test_df))),
+forecast = c(rep(NA, nrow(train_df)), combined_pred_test)
+) %>%
+ggplot(aes(x = date)) +
+geom_line(aes(y = actual), color = "black", size = 0.8) +
+geom_line(aes(y = fitted), color = "purple", linetype = "solid") +
+geom_line(aes(y = forecast), color = "orange", linetype = "dashed") +
+labs(title = "Taylor + ARIMA Combined Model: Actual vs Forecast",
+y = "Fed Funds Rate", x = "Year",
+caption = "Purple = fitted | Orange dashed = forecast") +
+theme_minimal()
+
+ols_plot
+ecm_plot
+combined_plot
+```
+
 By contrast, the **Taylor–ARIMA Combined** model shows improved in-sample residual structure (RMSE $\approx 1.66$) but a larger out-of-sample RMSE ($\approx 4.00$). This outcome arises because the ARIMA component ($\text{ARIMA}(2,1,3)$) is tuned to capture serial correlation in historical policy deviations ($\hat{\varepsilon}_t$), which were highly volatile during the 1980–2020 training period.\
 When applied to the test period-marked by comparatively stable rates, the ARIMA extrapolation amplifies noise, yielding over-dispersion in forecasts. Which allows us to surmise that while ARIMA enhances the *in-sample* dynamics by filtering autocorrelation, it reduces *out-of-sample robustness* under regime stability.
 
+To further analyze the results, we provide three forecast plots to illustrate how each model captures the evolution of the federal funds rate differently across time. Firth, the **Taylor Rule (OLS)** model (top panel) tracks the broad contours of monetary policy well, aligning with major rate cycles of the 1980s, early 2000s, and the post-COVID tightening. However, its fitted line (blue) smooths through short-run volatility, and the short-horizon forecast (red dashed) slightly underestimates the pace of recent rate normalization. This suggests that while the structural Taylor Rule captures long-term policy alignment with inflation and output gaps, it misses higher-frequency adjustments. Next, **Error-Correction Model (ECM)** (middle panel) operates on quarterly changes rather than levels. Its fitted values (green) hug the actual rate changes closely, especially after 1990, demonstrating that short-run deviations from equilibrium are well modeled as mean-reverting. Small forecast errors occur during abrupt shocks (e.g., 2008 and 2020), when nonlinear policy responses dominate. Finally, the **Taylor–ARIMA Combined** model (bottom panel) incorporates serial correlation in the OLS residuals, producing a dynamic adjustment that better matches historical persistence. Its fitted series (purple) aligns more tightly with historical swings, yet the forecast segment (orange dashed) overshoots during the stable post-2020 regime, reflecting how ARIMA extrapolates past volatility into calmer periods.  
+
+Overall, these visuals confirm the quantitative results from the RMSE table. The **OLS Taylor Rule** provides the most stable and interpretable forecasts.The **ECM** improves in-sample dynamics but slightly overfits. The **Taylor–ARIMA Combined** model captures historical persistence but sacrifices out-of-sample robustness.  
+
 In economic terms, this suggests that the **Taylor Rule itself remains structurally sound** for recent policy behavior, and that much of the autocorrelation observed historically reflects **temporary shocks or regime-specific persistence**. The combined model’s poorer forecast performance emphasizes the importance of *model parsimony* when the policy environment changes: the additional ARIMA layer, while statistically valid, can misinterpret macroeconomic calm as signal.
 
-The final combined forecast equation is:
-
-$$
-\widehat{i}_t^{\,\text{combined}}
-=
-\widehat{i}_t^{\,\text{Taylor}}
-+
-\widehat{\varepsilon}_t^{\,\text{ARIMA}},
-$$
-
-where $\hat{i}_t^{\text{Taylor}}$ represents the structural component implied by inflation and output gaps, and $\hat{\epsilon}_t^{\text{ARIMA}}$ captures the dynamic residual correction term. Overall, the findings highlight that post-2020 policy behavior is best captured by the **canonical Taylor Rule** rather than by more complex dynamic extensions.
 
 # Task 7: VAR Modeling
 
-We treat $\{i_t,\; (\pi_t-\pi^*),\; \text{OutputGap}_t\}$ as a joint system and estimate a VAR on **levels**.
+Here, we treat $\{i_t,\; (\pi_t-\pi^*),\; \text{OutputGap}_t\}$ as a joint system and estimate a VAR on **levels**.
 
 ### 7.1 Estimate, Forecast, and Granger Causality
 
@@ -1188,15 +1230,71 @@ gc_joint
 
 ```
 
-A Vector Autoregression (VAR) was estimated over the system $\{ i_t, (\pi_t - \pi^*), \text{OutputGap}_t \}$ using quarterly data from 1980 Q1 to 2022 Q4. The optimal lag length, selected using the Akaike Information Criterion, was eight, implying two years of dynamic feedback among the federal funds rate, inflation gap, and output gap. The resulting model exhibited high explanatory power with $R^2_i = 0.986$, $R^2_{\pi \text{gap}} = 0.44$, and $R^2_{\text{out gap}} = 0.93$, showing that past lags explain most variation in both the policy rate and the output gap, while the inflation gap remains more stochastic. All characteristic roots lie within the unit circle, confirming that the system is dynamically stable and suitable for forecasting.
+The optimal lag length, selected using AIC, was eight, implying two years of dynamic feedback among the federal funds rate, inflation gap, and output gap. The resulting model exhibited high explanatory power with $R^2_i = 0.986$, $R^2_{\pi \text{gap}} = 0.44$, and $R^2_{\text{out gap}} = 0.93$, showing that past lags explain most variation in both the policy rate and the output gap, while the inflation gap remains more stochastic. All characteristic roots lie within the unit circle, confirming that the system is dynamically stable and suitable for forecasting.
+
+```{r var plot, echo=FALSE, include=TRUE, warning=FALSE, warning=FALSE, message=FALSE, fig.width=7, fig.height=7}
+library(ggplot2)
+library(patchwork)
+
+var_forecast_df <- data.frame(
+  date = test_df$date,
+  actual_i = test_df$i,
+  forecast_i = var_pred_test[, "i"]
+)
+
+p_forecast <- ggplot(var_forecast_df, aes(x = date)) +
+  geom_line(aes(y = actual_i), color = "black", size = 0.8) +
+  geom_line(aes(y = forecast_i), color = "red", linetype = "dashed", size = 0.9) +
+  labs(
+    title = "VAR Forecast: Federal Funds Rate",
+    subtitle = "Black = Actual | Red dashed = Forecast",
+    x = "Date", y = "Fed Funds Rate"
+  ) +
+  theme_minimal()
+
+# Residual Diagnostics Plot
+var_resids <- residuals(var_fit)
+resid_df <- data.frame(
+  date = train_df$date[(p_opt + 1):nrow(train_df)],
+  resid_i = var_resids[, "i"],
+  resid_infl = var_resids[, "infl_gap"],
+  resid_out = var_resids[, "out_gap"]
+)
+
+p_resid_i <- ggplot(resid_df, aes(x = date, y = resid_i)) +
+  geom_line(color = "steelblue") +
+  geom_hline(yintercept = 0, color = "black", size = 0.5) +
+  labs(title = "Resid Int Rate", x = "Date", y = "Residual") +
+  theme_minimal()
+
+p_resid_infl <- ggplot(resid_df, aes(x = date, y = resid_infl)) +
+  geom_line(color = "darkorange") +
+  geom_hline(yintercept = 0, color = "black", size = 0.5) +
+  labs(title = "Resid Inflation Gap", x = "Date", y = "Residual") +
+  theme_minimal()
+
+p_resid_out <- ggplot(resid_df, aes(x = date, y = resid_out)) +
+  geom_line(color = "forestgreen") +
+  geom_hline(yintercept = 0, color = "black", size = 0.5) +
+  labs(title = "Resid Output Gap", x = "Date", y = "Residual") +
+  theme_minimal()
+
+p_forecast / (p_resid_i | p_resid_infl | p_resid_out)
+```
 
 The model’s predictive accuracy was assessed through in-sample and out-of-sample RMSEs. In the training data, RMSE values were 0.388 for $i_t$, 0.0032 for $(\pi_t - \pi^*)$, and 0.479 for the output gap. The corresponding test RMSEs were 0.761, 0.0035, and 1.728, respectively. The model captures the dynamics of the federal funds rate with relatively low error, while the inflation gap is predicted with remarkable precision and the output gap displays greater volatility in the test set, particularly in the post-pandemic period. Compared with the Taylor Rule (OLS) and Error-Correction (ECM) specifications, the VAR provides a richer multivariate framework at the cost of added complexity. Its predictive accuracy for $i_t$ sits between the ECM and Taylor–ARIMA combined models, indicating a balanced trade-off between fit and generalization.
+
+A visual inspection of the forecast VAR forecasts and residual diagnostics reinforce the system’s stability and forecasting behavior. In the **forecast plot**, the model successfully tracks the broad movements of the federal funds rate through the test period, capturing the gradual normalization in the post-pandemic era. The red dashed line follows the actual trajectory closely for most of 2023, though it slightly lags turning points, consistent with the model’s reliance on lagged dynamics. The moderate widening of forecast deviations in 2024 reflects both macroeconomic uncertainty and the model’s limited sensitivity to sudden structural changes. For brevity's sake we only provide 
+
+The **residual plots** show that the innovations are generally centered around zero and exhibit no strong serial correlation or heteroskedasticity. For the federal funds rate equation, residual volatility spikes during known turbulence—most notably the early 1980s Volcker disinflation and the 2008 financial crisis—but returns quickly to stability thereafter. The inflation-gap and output-gap residuals oscillate narrowly around zero, confirming that most systematic co-movement among variables has been captured by the VAR structure. 
+
+Together, these diagnostics confirm that the estimated VAR is dynamically well-specified and that forecast errors are largely random rather than driven by model misspecification. While small deviations persist during transition regimes, the model effectively captures the co-evolution of interest rate, inflation, and real-activity dynamics across decades.
 
 Causality testing further illuminates the system’s internal dynamics. The Granger causality test, with the null hypothesis that inflation and output gaps do not Granger-cause $i_t$, yielded $F(16,414) = 1.4004$ and $p = 0.137$, leading to a failure to reject the null. This suggests that lagged information about inflation and real activity does not significantly improve forecasts of the policy rate once its own history is included. However, the instantaneous causality test produced $\chi^2(2) = 20.48$ with $p < 0.001$, implying strong contemporaneous correlations among $\{ i_t, (\pi_t - \pi^*), \text{OutputGap}_t \}$. These results support the interpretation that monetary policy actions are largely contemporaneous with prevailing macroeconomic conditions, consistent with a responsive but forward-looking central bank reaction function.
 
 Which indicates strong contemporaneous interaction among $\{i_t, (\pi_t - \pi^*), \text{OutputGap}_t\}$, consistent with the idea that the Fed adjusts rates within the same quarter in response to inflation and output signals. Together, these results imply that policy moves are largely contemporaneous with macroeconomic conditions rather than driven by lagged information.
 
-```{r Tsk 7.2, echo=FALSE, include=TRUE}
+```{r Tsk 7.2, echo=FALSE, include=TRUE, warning=FALSE}
 irf_g_infl_to_all <- irf(
   var_fit,
   impulse  = "infl_gap",
@@ -1218,8 +1316,18 @@ irf_g_out_to_all <- irf(
 p1 <- plot(irf_g_infl_to_all)
 p2 <- plot(irf_g_out_to_all)
 
-p1 + p2
+(p1 | p2)
 ```
+
+The orthogonal impulse responses further clarify the dynamic relationships among the federal funds rate ($i_t$), inflation gap ($\pi_t - \pi^*$), and output gap ($\text{OutputGap}_t$).  
+
+Following a **positive shock to the inflation gap**, the federal funds rate responds with a persistent upward adjustment over the next eight quarters. This pattern reflects the monetary authority’s tightening reaction to unexpected inflationary pressure—interest rates rise gradually but remain elevated, consistent with a policy stance aimed at cooling demand. The inflation gap itself exhibits mild mean reversion, implying anchored expectations, while the output gap shows a small negative reaction, suggesting that higher rates modestly slow real activity.  
+
+In contrast, a **positive shock to the output gap** (an expansionary surprise) also provokes a pronounced increase in the policy rate, which peaks around the second or third quarter and remains elevated for roughly two years. The inflation gap responds only weakly and within the confidence bounds, indicating that real-side fluctuations transmit to prices with a lag and limited magnitude. The output gap itself reverts gradually, confirming that the system is dynamically stable—output deviations dissipate as monetary tightening restores equilibrium.  
+
+Together, these orthogonal IRFs reinforce the interpretation that monetary policy acts as a stabilizing force: rate increases follow both inflationary and real-demand shocks, but the responses are controlled, persistent, and ultimately mean-reverting. The narrow bootstrap confidence intervals demonstrate well-estimated dynamics, lending confidence to the VAR’s internal consistency and the credibility of its impulse response structure.
+
+>> updates!!!!!!
 
 Next, Impulse Response Functions were generated from the fitted VAR to trace the system’s dynamic adjustment to one-time shocks. The IRFs describe how each variable in $\{ i_t, (\pi_t - \pi^*), \text{OutputGap}_t \}$ evolves following a temporary disturbance in another variable. The responses were computed over eight quarters with 90% bootstrapped confidence intervals based on 100 replications.
 
@@ -1232,3 +1340,61 @@ Together, the impulse response and causality analyses reveal a coherent monetary
 Relative to the Taylor-ARIMA combined model from Task 6, the VAR framework provides a more structural and interactive representation of monetary policy behavior. While the ARIMA extension improved short-run forecast precision by modeling residual autocorrelation in the Taylor Rule, it remained a univariate correction focused solely on $i_t$. The VAR, by contrast, endogenizes inflation and the output gap, allowing policy reactions and macroeconomic feedback to emerge jointly within a unified system. The ARIMA-based approach excels at capturing serial dependence but lacks cross-variable dynamics; the VAR overcomes that limitation by explicitly linking shocks across equations. Although the Taylor-ARIMA model achieved a lower test RMSE, the VAR reveals the economic mechanism underlying those patterns: interest-rate adjustments are immediate and persistent responses to contemporaneous inflation and output fluctuations. Thus, the VAR complements the previous models by translating statistical fit into a richer narrative of policy interaction and macroeconomic stabilization.
 
 # Appendix
+
+## Additional Technical Analysis on Residual Stationarity 
+
+In task 5 and 6 above, we explore the stationarity of the residuals, with resounding evidence in favor of stationarity. However, we note that the ARIMA model selected a first difference as the most viable model. Here, we provide additional stationarity tests and visual inspection of the ACF and PACF plots of the OLS residuals to further illuminate this discrepancy. 
+
+As shown in the figure below, the raw residuals exhibit a slowly decaying ACF, which is a hallmark of non-stationarity
+or at least a near-unit-root process. The PACF, in contrast, cuts off more sharply after the first lag,
+suggesting a strong short-term autoregressive structure but persistent long-run dependence. Once the residuals are differenced, both the ACF and PACF quickly die out, indicating that first differencing effectively removes the low-frequency dependence and yields a more stationary process. This is consistent with the automated model’s choice of $d = 1$, as differencing neutralizes slow mean reversion and structural shifts that the unit root tests (especially ZA and PP) may have treated as deterministic trends rather than stochastic persistence.
+
+This contrasts with some of our additional stationarity tests. The **KPSS** test (null $H_0$: stationarity) indeed indicates that the series is stationary in levels once a deterministic trend is allowed. Specifically, the level-stationarity version yields $p \ge 0.10$, and the trend-stationarity version also yields $p \ge 0.10$, while the “with drift, no trend” variant rejects with $p \le 0.01$. Taken together, these results suggest that $\hat{\varepsilon}_t$ is **trend–stationary** rather than containing a stochastic trend: deviations are mean-reverting around a deterministic component. Formally, we fail to reject stationarity for $\hat{\varepsilon}_t = \mu + \tau t + u_t$ with $u_t$ covariance-stationary.
+
+Allowing for an endogenous structural change, the **Zivot–Andrews** test rejects the unit-root null once a single break in intercept and trend is permitted. The test statistic is $-7.09$, which is more negative than the 1% critical value ($-5.57$), implying stationarity conditional on a single regime shift. The estimated break occurs early in the sample (position $\approx 9$), consistent with a Volcker-era policy shift. Economically, this means the Taylor Rule relationship is stable within regimes but parameters likely changed once, so that $\hat{\varepsilon}_t$ behaves as a stationary process after accounting for that break.
+
+The **Phillips–Perron** test, which shares the ADF null $H_0$ unit root but is robust to serial correlation and heteroskedasticity, also rejects nonstationarity decisively (Z–tau $=-6.41$, beyond the 1% critical value). This corroborates that the residual process does not harbor a stochastic trend once inflation and output gaps are included on the right-hand side.
+
+In summary, while some formal tests reject the unit root hypothesis, the serial correlation patterns in the
+ACF/PACF suggest residual persistence that is better modeled through differencing. This highlights a key modeling nuance:
+
+$$
+\text{Stationarity in a statistical sense} \; \not\Rightarrow \; \text{No benefit from differencing for forecast performance.}
+$$
+
+auto.arima()’s selection thus reflects a pragmatic trade-off — favoring improved residual whiteness and forecast
+reliability over strict adherence to asymptotic stationarity results.
+ 
+```{r, include=TRUE, echo=FALSE, warning=FALSE}
+library(knitr)
+stationarity_results <- data.frame(
+Test = c("Augmented Dickey-Fuller (ADF)",
+"KPSS",
+"Zivot–Andrews (ZA)",
+"Phillips–Perron (PP)"),
+Statistic = c("-16.27 to -7.93",
+"0.928 to 1.07",
+"-7.09",
+"-6.41"),
+`p-value` = c("<= 0.01",
+"Mixed (<= 0.01,>= 0.10)",
+"< 0.01",
+"< 0.01"),
+Inference = c("Stationary",
+"Borderline trend-stationary possible",
+"Stationary (structural break)",
+"Stationary")
+)
+kable(stationarity_results,
+caption = "Summary of Unit Root and Stationarity Tests for OLS Residuals",
+align = "lccc")
+```
+
+```{r, include=TRUE, echo=FALSE}
+par(mfrow = c(2,2))
+acf(ols_resid_train_ts, main = "ACF: OLS Residuals")
+pacf(ols_resid_train_ts, main = "PACF: OLS Residuals")
+acf(diff(ols_resid_train_ts), main = "ACF: Differenced Residuals")
+pacf(diff(ols_resid_train_ts), main = "PACF: Differenced Residuals")
+par(mfrow = c(1,1))
+```
