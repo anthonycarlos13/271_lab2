@@ -766,7 +766,7 @@ This difference may be attributed to the relative calm in the market during the 
 # summary(taylor_mod)
 ```
 
-```{r, include=FALSE, echo=FALSE}
+```{r, echo=FALSE, include=FALSE}
 
 # Anthony comment - theres an error here. `taylor_mod` above is a MABLE not a numeric vector. Need the residual as a numeric vector...
 
@@ -783,13 +783,18 @@ taylor_resid <- taylor_resid_tsbl %>%
 adf.test(taylor_resid)
 ```
 
-Since the p value is 0.01024 and less than 0.05, we reject the null hypothesis that the series has a unit root. This means that the residuals are stationary and there is a long-run equilibrium relationship.
-
 Next, we want to investigate whether there is a long-run equilibrium for the basic Taylor rule model. Since the Federal Reserve consistently adjusts the federal funds rate in response to changes in inflation and the output gap, there could be a mean-reverting relationship in the long run. To test this, we will perform a Cointegration Test, specifically the Engle-Granger two-step test. 
 
 To perform this test, we take our Taylor model that we fit previously and extract the residuals. Next, we perform an ADF test on the residuals. Looking at the results, the ADF statistics are strongly negative and the p-values are below 0.05 for most specifications (with and without drift or trend). This indicates that we can reject the null hypothesis of a unit root. In other words, the residuals are stationary. Therefore, we conclude that there exists a long-run equilibrium relationship between the federal funds rate, the inflation gap, and the output gap. This means
-that the variables are cointegrated, satisfying the condition necessary for estimating an Error
-Correction Model (ECM).
+that the variables are cointegrated, satisfying the condition necessary for estimating an Error Correction Model (ECM).
+
+| Lag | Type 1 ADF | Type 1 p.value | Type 2 ADF | Type 2 p.value | Type 3 ADF | Type 3 p.value |
+| :-: | ---------: | -------------: | ---------: | -------------: | ---------: | -------------: |
+|  0  |      -3.67 |         0.0100 |      -3.66 |         0.0100 |      -6.39 |           0.01 |
+|  1  |      -2.94 |         0.0100 |      -2.93 |         0.0463 |      -5.85 |           0.01 |
+|  2  |      -2.35 |         0.0204 |      -2.33 |         0.1981 |      -4.58 |           0.01 |
+|  3  |      -2.51 |         0.0133 |      -2.50 |         0.1348 |      -4.93 |           0.01 |
+|  4  |      -2.43 |         0.0171 |      -2.39 |         0.1765 |      -4.19 |           0.01 |
 
 ## 5.2: Estimating the ECM via OLS (5 Points)
 
@@ -814,21 +819,30 @@ infl_data_tsbl_ecm_test <- infl_data_tsbl_ecm %>%
   filter(date > yearquarter("2022 Q4"))
 ```
 
-```{r, include=TRUE, echo=FALSE}
+```{r, include=FALSE, echo=FALSE}
 ecm_model <- lm(d_it ~ d_infl_gap + d_output_gap + lag_resid, 
                 data = infl_data_tsbl_ecm)
-summary(ecm_model)
+#summary(ecm_model)
 ```
 
-In an ECM model, we are able to capture both the short-run adjustments and the long-run equilibrium relationship between economic variables. Specifically, the model allows us to separate temporary fluctuations from the underlying equilibrium path implied by economic theory. Deviations from the long-run equilibrium (captured by the lagged residual term) influence short-run changes in the dependent variable, showing how the system “corrects” itself over time. To estimate the ECM, we calculate the change in interest rate ($d_it$), the change in output gap ($d_output_gap$), the change in inflation gap ($d_Inflation_gap$), and the equilibrium error ($lag_resid$). The first three variables can be directly calculated using our data. The equilibrium error can be calculated by first fitting a long-run regression (the basic Taylor Rule model) to extract the residuals and then using those values as the lagged adjustment term.
+In an ECM model, we are able to capture both the short-run adjustments and the long-run equilibrium relationship between economic variables. Specifically, the model allows us to separate temporary fluctuations from the underlying equilibrium path implied by economic theory. Deviations from the long-run equilibrium (captured by the lagged residual term) influence short-run changes in the dependent variable, showing how the system “corrects” itself over time. To estimate the ECM, we calculate the change in interest rate (d_it), the change in output gap (d_output_gap), the change in inflation gap (d_infl_gap), and the equilibrium error (lag_resid). The first three variables can be directly calculated using our data. The equilibrium error can be calculated by first fitting a long-run regression (the basic Taylor Rule model) to extract the residuals and then using those values as the lagged adjustment term.
 
-To estimate the ECM, we calculate the change in interest rate ($d_{it}$), the change in output gap ($d_output_gap$), the change in inflation gap ($d_Inflation_gap$), and the equilibrium error ($lag_resid$). The first three variables can be directly calculated using our data. The equilibrium error can be calculated by first fitting a long-run regression (the basic Taylor Rule model) to extract the residuals and then using those values as the lagged adjustment term. Our final ECM model is specified as:
+To estimate the ECM, we calculate the change in interest rate (d_it), the change in output gap (d_output_gap), the change in inflation gap (d_infl_gap), and the equilibrium error (lag_resid). The first three variables can be directly calculated using our data. The equilibrium error can be calculated by first fitting a long-run regression (the basic Taylor Rule model) to extract the residuals and then using those values as the lagged adjustment term. Our final ECM model is specified as:
+
 $$
 \Delta i_t = \gamma_0 + \gamma_1 \Delta(\pi_t - \pi^*) + \gamma_2 \Delta(\text{Output Gap}_t) + \phi \left[ i_{t-1} - \beta_1(\pi_{t-1} - \pi^*) - \beta_2(\text{Output Gap}_{t-1}) \right] +\varepsilon_t
 $$
+
 We note that the coefficient $\phi$ captures the speed of adjustment and is typically negative, indicating that when the interest rate deviates from its long-run equilibrium, it adjusts in the next period to restore balance. 
 
-After fitting our model, we get the following results. The coefficient on the lagged residual term ($lag_resid$) is -0.061, which is negative and statistically significant. This confirms the presence of an error correction mechanism, indicating that when the federal funds rate deviates from its long-run equilibrium, it adjusts by about 6% in the following quarter to restore equilibrium. The coefficient on the change in the output gap ($d_output_gap$) is 0.422 and also significant, suggesting that short-run movements in the output gap have a meaningful positive effect on changes in the interest rate. In contrast, the coefficient on the change in the inflation gap ($d_infl_gap$) is positive but statistically insignificant, implying that short-run changes in inflation do not have a significant immediate impact on interest rate adjustments.
+| Model        | Estimate | Std. Error | t value |  p value |
+| :----------- | -------: | ---------: | ------: | -------: |
+| (Intercept)  | -0.05479 |    0.05493 |  -0.997 | 0.319938 |
+| d_infl_gap   | 12.63397 |   14.01487 |   0.901 | 0.368571 |
+| d_output_gap |  0.42169 |    0.08784 |   4.801 | 3.36e-06 |
+| lag_resid    | -0.06119 |    0.01750 |  -3.497 | 0.000596 |
+
+After fitting our model, we get the following results. The coefficient on the lagged residual term (lag_resid) is -0.061, which is negative and statistically significant. This confirms the presence of an error correction mechanism, indicating that when the federal funds rate deviates from its long-run equilibrium, it adjusts by about 6% in the following quarter to restore equilibrium. The coefficient on the change in the output gap (d_output_gap) is 0.422 and also significant, suggesting that short-run movements in the output gap have a meaningful positive effect on changes in the interest rate. In contrast, the coefficient on the change in the inflation gap (d_infl_gap) is positive but statistically insignificant, implying that short-run changes in inflation do not have a significant immediate impact on interest rate adjustments.
 
 ## 5.3: Compare ECM Forecasts (5 Points)
 
@@ -844,7 +858,7 @@ summary(ecm_model_train)
 ecm_fc <- forecast(ecm_model_train, newdata = as.data.frame(infl_data_tsbl_ecm_test))
 ```
 
-```{r, echo=FALSE, include=TRUE, warning=FALSE, message=FALSE}
+```{r, echo=FALSE, include=FALSE, warning=FALSE, message=FALSE}
 d_hat <- ecm_fc$mean
 
 # Convert to level forecasts
@@ -861,7 +875,7 @@ ecm_rmse <- sqrt(mean((infl_data_tsbl_ecm_test$FEDFUNDS_hampel - i_hat)^2, na.rm
 ecm_rmse
 ```
 
-```{r, echo=FALSE, include=TRUE, warning=FALSE, message=FALSE}
+```{r, echo=FALSE, include=FALSE, warning=FALSE, message=FALSE}
 # ols_fc <- forecast(taylor_mod, newdata = infl_data_tsbl_test)
 # ols_pred <- ols_fc$mean
 # ols_rmse <- sqrt(mean((infl_data_tsbl_test$FEDFUNDS_hampel - ols_pred)^2, na.rm = TRUE))
@@ -880,6 +894,11 @@ ols_rmse <- sqrt(mean(
 
 ols_rmse
 ```
+
+| Model       |  Test RMSE |
+| :---------- | ----: |
+| ECM         | 1.273 |
+| Taylor Rule | 0.926 |
 
 To test our model’s performance, we train the ECM model on data from 1980Q1 to 2022Q4 and forecast from 2023Q1 to 2024Q4. Our metric will be the Root Mean Squared Error (RMSE). To get the RMSE value from our ECM model, we have to convert the predicted $d_it$ values back to the level forecasts of the federal funds rate. This is done by cumulatively adding the predicted changes to the last observed value of the interest rate from the training period. Once we obtain these level forecasts, we can directly compare them to the actual observed federal funds rate in the test period to compute the RMSE. Overall, the ECM model performs slightly worse, with an RMSE of 1.272986 compared to 0.9260019 for the baseline OLS-based Taylor Rule model. While we might expect the ECM to have a lower RMSE due to its ability to capture both short-run dynamics and long-run equilibrium, this result likely reflects changes in Federal Reserve behavior during 2023 to 2024. Because our model was trained on data from 1980 to 2022, it may not fully capture these recent shifts, making the ECM forecasts less predictable in this period.
 
