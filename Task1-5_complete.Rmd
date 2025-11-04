@@ -362,21 +362,25 @@ To detect outliers, we've chosen to use the Hampel filter. We prefer
 this method because based on a visual examination of FFER, PECPI, and
 GDP data, scores appear to be mostly following either an upward trend or
 a fluctuating downward trend, with few outliers. The outliers that do
-appear (i.e. in Real GDP around 2020) are within the data (as opposed to
-on the upper and lower ends of the data). Thus, this would not be caught
-by winsorization. The rolling window calculations from a Hampel filter
-(relying on deviations from a median) would catch these outliers and
-smooth out the data. Z-scores, as well, is best suited to normally
-distributed data, which we don't have.
+appear (i.e. in Real GDP around 2020) are within the range of the data
+(as opposed to on the upper and lower ends of the data). Thus, this
+would not be caught by winsorization, which sets minimum and maximum
+percentile values and sets outliers to these values. Outliers in our
+data are not at the extremes – the rolling window calculations from a
+Hampel filter (relying on deviations from a median) would catch these
+outliers and smooth out the data. Z-scores, as well, is best suited to
+normally distributed data.
 
 ### Outlier Detection
 
 We utilize a Hampel filter for the FFER, PECPI, GDP, GDPPOT, and output
-gap timeseries. A window size of 5 appeared to smooth out outliers best
-upon a visual examination of the corrected timeseries data. While we ran
-a Hampel filters to detect potential outliers, we retained the original
-FFER series for estimation because large rate changes reflect actual
-policy, not data errors.
+gap timeseries. When applying a Hampel filter, one must choose a window
+over which to calculate median absolute deviation. A window size of 5
+appeared to smooth out outliers best upon a visual examination of the
+corrected timeseries data given the short time range of the outlier
+values. While we ran a Hampel filters to detect potential outliers, we
+retained the original FFER series for estimation because large rate
+changes reflect actual policy, not data errors.
 
 ```{r Task 2.2.1 Apply Hampel filters, echo=FALSE, include=FALSE}
 
@@ -538,7 +542,8 @@ seasonal adjustment before fitting ARIMA-type models. This seasonality
 is not necessarily visible in the boxplots, but appears in
 institutionally provided data such as the Bureau of Economic Analysis as
 already seasonally adjusted, so some adjustment makes sense in our
-analysis as well.
+analysis as well. We apply a seasonal adjustment in the following
+section.
 
 ```{r GDP Seasonal Plots, echo=FALSE, include=TRUE, warning=FALSE, fig.height=10, fig.width=7}
 gdp_full <- gdp_full %>% mutate(q = quarter(date))
@@ -583,7 +588,10 @@ prior to modeling.
 This is consistent with standard macroeconomic data practices: most
 official GDP series are *seasonally adjusted annualized rates (SAAR)*,
 meaning any regular quarterly effects have already been filtered out by
-the data provider.
+the data provider. Seasonally-dependent GDP, however, is common based on
+things like holiday demand, increased productivity based on weather
+conditions, fiscal year spending deadlines, etc. As stated earlier, this
+seasonality is handled before our data arrives to our analysis.
 
 ```{r GDPPOT Seasonal Plots, echo=FALSE, include=TRUE, warning=FALSE, fig.height=10, fig.width=7}
 pot_gdp_full <- pot_gdp_full %>% mutate(q = quarter(date))
@@ -631,9 +639,9 @@ seasonal behavior.
 
 Therefore, to ensure consistency with other macroeconomic variables in
 the model (such as Real GDP and FFER), it may be appropriate to apply
-**seasonal differencing** or a **low-pass filter** (e.g., HP filter) to
-the GDPPOT series before computing the output gap or including it in
-time series models.
+**seasonal differencing** or a **low-pass filter** (e.g., Hampel filter)
+to the GDPPOT series before computing the output gap or including it in
+time series models. We apply this in the following section.
 
 ### Seasonal Adjustment via X-13ARIMA-SEATS
 
