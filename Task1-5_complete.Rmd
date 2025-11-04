@@ -757,7 +757,7 @@ This difference may be attributed to the relative calm in the market during the 
 
 # Task 5
 
-## 5.1: Cointegration Test (5 Points)
+## 5.1: Cointegration Test
 
 ```{r, echo=FALSE, include=FALSE}
 ## Tom Commented this code after creating the model in task 4
@@ -796,7 +796,7 @@ that the variables are cointegrated, satisfying the condition necessary for esti
 |  3  |      -2.51 |         0.0133 |      -2.50 |         0.1348 |      -4.93 |           0.01 |
 |  4  |      -2.43 |         0.0171 |      -2.39 |         0.1765 |      -4.19 |           0.01 |
 
-## 5.2: Estimating the ECM via OLS (5 Points)
+## 5.2: Estimating the ECM via OLS
 
 ```{r, echo=FALSE, include=FALSE}
 # full residuals to add back to tsibble
@@ -844,7 +844,7 @@ We note that the coefficient $\phi$ captures the speed of adjustment and is typi
 
 After fitting our model, we get the following results. The coefficient on the lagged residual term (lag_resid) is -0.061, which is negative and statistically significant. This confirms the presence of an error correction mechanism, indicating that when the federal funds rate deviates from its long-run equilibrium, it adjusts by about 6% in the following quarter to restore equilibrium. The coefficient on the change in the output gap (d_output_gap) is 0.422 and also significant, suggesting that short-run movements in the output gap have a meaningful positive effect on changes in the interest rate. In contrast, the coefficient on the change in the inflation gap (d_infl_gap) is positive but statistically insignificant, implying that short-run changes in inflation do not have a significant immediate impact on interest rate adjustments.
 
-## 5.3: Compare ECM Forecasts (5 Points)
+## 5.3: Compare ECM Forecasts
 
 ```{r, echo=FALSE, include=FALSE}
 ecm_model_train <- lm(d_it ~ d_infl_gap + d_output_gap + lag_resid, 
@@ -875,6 +875,47 @@ ecm_rmse <- sqrt(mean((infl_data_tsbl_ecm_test$FEDFUNDS_hampel - i_hat)^2, na.rm
 ecm_rmse
 ```
 
+
+```{r, include=TRUE, warning=FALSE, echo=FALSE}
+# Forecasted interest rate values
+forecasted_rates <- c(3.790233, 3.803334, 3.976060, 3.968832,
+                      3.716815, 3.767303, 3.740660, 3.565013,
+                      3.215984, 3.334059)
+
+# Actual observed Fed Funds rates
+actual_rates <- c(4.52, 4.99, 5.26, 5.33, 5.33, 5.33, 5.26, 4.65, 4.33, 4.33)
+
+# Quarters as labels
+quarters <- c("2023Q1", "2023Q2", "2023Q3", "2023Q4",
+              "2024Q1", "2024Q2", "2024Q3", "2024Q4",
+              "2025Q1", "2025Q2")  # adjust if needed
+
+# Create data frame in long format for ggplot
+forecast_df <- data.frame(
+  Quarter = factor(rep(quarters, 2), levels = quarters),
+  Rate = c(forecasted_rates, actual_rates),
+  Type = rep(c("Forecast", "Actual"), each = length(forecasted_rates))
+)
+
+# Minimal comparison plot
+ggplot(forecast_df, aes(x = Quarter, y = Rate, color = Type, group = Type)) +
+  geom_line() +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_line(color = "gray90"),
+    legend.position = "top"
+  ) +
+  labs(
+    x = "Quarter",
+    y = "Federal Funds Rate (%)",
+    color = "Rate Type",
+    title = "ECM Forecast vs Actual Rates"
+  ) +
+  scale_color_manual(values = c("Forecast" = "blue", "Actual" = "red"))
+```
+
 ```{r, echo=FALSE, include=FALSE, warning=FALSE, message=FALSE}
 # ols_fc <- forecast(taylor_mod, newdata = infl_data_tsbl_test)
 # ols_pred <- ols_fc$mean
@@ -895,12 +936,12 @@ ols_rmse <- sqrt(mean(
 ols_rmse
 ```
 
+To test our model’s performance, we train the ECM model on data from 1980Q1 to 2022Q4 and forecast from 2023Q1 to 2024Q4. Our metric will be the Root Mean Squared Error (RMSE). To get the RMSE value from our ECM model, we have to convert the predicted $d_it$ values back to the level forecasts of the federal funds rate. This is done by cumulatively adding the predicted changes to the last observed value of the interest rate from the training period. Once we obtain these level forecasts, we can directly compare them to the actual observed federal funds rate in the test period to compute the RMSE. Overall, the ECM model performs slightly worse, with an RMSE of 1.272986 compared to 0.9260019 for the baseline OLS-based Taylor Rule model. While we might expect the ECM to have a lower RMSE due to its ability to capture both short-run dynamics and long-run equilibrium, this result likely reflects changes in Federal Reserve behavior during 2023 to 2024. Because our model was trained on data from 1980 to 2022, it may not fully capture these recent shifts, making the ECM forecasts less predictable in this period.
+
 | Model       |  Test RMSE |
 | :---------- | ----: |
 | ECM         | 1.273 |
 | Taylor Rule | 0.926 |
-
-To test our model’s performance, we train the ECM model on data from 1980Q1 to 2022Q4 and forecast from 2023Q1 to 2024Q4. Our metric will be the Root Mean Squared Error (RMSE). To get the RMSE value from our ECM model, we have to convert the predicted $d_it$ values back to the level forecasts of the federal funds rate. This is done by cumulatively adding the predicted changes to the last observed value of the interest rate from the training period. Once we obtain these level forecasts, we can directly compare them to the actual observed federal funds rate in the test period to compute the RMSE. Overall, the ECM model performs slightly worse, with an RMSE of 1.272986 compared to 0.9260019 for the baseline OLS-based Taylor Rule model. While we might expect the ECM to have a lower RMSE due to its ability to capture both short-run dynamics and long-run equilibrium, this result likely reflects changes in Federal Reserve behavior during 2023 to 2024. Because our model was trained on data from 1980 to 2022, it may not fully capture these recent shifts, making the ECM forecasts less predictable in this period.
 
 # Task 6: ARIMA Modeling of Taylor Rule Errors
 
