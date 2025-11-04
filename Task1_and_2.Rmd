@@ -1,6 +1,8 @@
 ---
 title: "R Notebook"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
 
 ```{r imports}
@@ -18,6 +20,8 @@ library(pracma)
 library(seastests)
 #install.packages(c("seasonal", "x13binary"))
 library(seasonal)
+library(tseries)
+library(forecast)
 ```
 
 # Task 1
@@ -317,7 +321,7 @@ start_quarter <- 1
 
 ffer_ts <- ts(ffer_full$hampel_val, start = c(start_year, start_quarter), frequency=4)
 
-qs(ffer_ts)
+seastests::qs(ffer_ts)
 ```
 
 According to our QS test, no evidence for seasonality in the FFER data exists
@@ -347,7 +351,7 @@ start_quarter <- 1
 
 pcepi_ts <- ts(pcepi_full$hampel_val, start = c(start_year, start_quarter), frequency=4)
 
-qs(pcepi_ts)
+seastests::qs(pcepi_ts)
 ```
 
 According to our QS test, evidence for seasonality in the PCEPI data exists.
@@ -377,7 +381,7 @@ start_quarter <- 1
 
 gdp_full_ts <- ts(gdp_full$hampel_val, start = c(start_year, start_quarter), frequency=4)
 
-qs(gdp_full_ts)
+seastests::qs(gdp_full_ts)
 ```
 
 According to our QS test, no evidence for seasonality in the GDP data exists
@@ -407,7 +411,7 @@ start_quarter <- 1
 
 pot_gdp_full_ts <- ts(pot_gdp_full$hampel_val, start = c(start_year, start_quarter), frequency=4)
 
-qs(pot_gdp_full_ts)
+seastests::qs(pot_gdp_full_ts)
 ```
 
 According to our QS test, evidence for seasonality in the GDPPOT data exists
@@ -473,3 +477,115 @@ pcepi_full %>%
 
 # pot_gdp_test <- pot_gdp_full %>% filter(date >= as.Date('2024-01-01'))
 ```
+
+# Task 4
+
+```{r}
+infl_data_tsbl <- ffer_full %>% 
+  select(date, hampel_val) %>% 
+  rename(FEDFUNDS_hampel = hampel_val) %>%
+  left_join(pcepi_full, by = "date") %>%
+  select(date, FEDFUNDS_hampel, s_adj_val, pct_chg_pce) %>%
+  rename(PCEPI_s_adj = s_adj_val) %>%
+  left_join(gdp_full, by = "date") %>%
+  select(date, FEDFUNDS_hampel, PCEPI_s_adj, pct_chg_pce, hampel_val) %>%
+  rename(GDPC1_hampel = hampel_val) %>%
+  left_join(pot_gdp_full, by = "date") %>%
+  select(date, FEDFUNDS_hampel, PCEPI_s_adj, pct_chg_pce, GDPC1_hampel, s_adj_val) %>%
+  rename(GDPPOT_s_adj = s_adj_val) %>%
+  mutate(
+    output_gap = 100 * (GDPC1_hampel - GDPPOT_s_adj) / GDPPOT_s_adj,
+    pct_chg_pce_s_adj = (PCEPI_s_adj / lag(PCEPI_s_adj) - 1),
+    inflation_gap = pct_chg_pce_s_adj - 0.02,
+    date = yearquarter(date)
+  ) %>%
+  as_tsibble(index = date)
+
+infl_data_tsbl_train <- infl_data_tsbl %>% 
+  filter(date <= yearquarter("2022 Q4"))
+infl_data_tsbl_test <- infl_data_tsbl %>% 
+  filter(date > yearquarter("2022 Q4"))
+```
+
+# Task 5
+
+## 5.1: Cointegration Test (5 Points)
+
+```{r}
+taylor_mod <- lm(FEDFUNDS_hampel ~ inflation_gap + output_gap, 
+                 data = infl_data_tsbl_train)
+summary(taylor_mod)
+```
+
+```{r}
+taylor_resid <- resid(taylor_mod)
+adf.test(taylor_resid)
+```
+
+Since the p value is 0.01024 and less than 0.05, we reject the null hypothesis that the series has a unit root. This means that the residuals are stationary and there is a  long-run equilibrium relationship.
+
+## 5.2: Estimating the ECM via OLS (5 Points)
+
+```{r}
+# full residuals to add back to tsibble
+long_run_model <- lm(FEDFUNDS_hampel ~ inflation_gap + output_gap, 
+                     data = infl_data_tsbl)
+long_run_resid <- c(NA, resid(long_run_model))
+
+# add ECM variables
+infl_data_tsbl_ecm <-  infl_data_tsbl %>%
+  mutate(
+    d_it = FEDFUNDS_hampel - lag(FEDFUNDS_hampel),
+    d_infl_gap = inflation_gap - lag(inflation_gap),
+    d_output_gap = output_gap - lag(output_gap),
+    lag_resid = lag(long_run_resid)
+  )
+
+infl_data_tsbl_ecm_train <- infl_data_tsbl_ecm %>% 
+  filter(date <= yearquarter("2022 Q4"))
+infl_data_tsbl_ecm_test <- infl_data_tsbl_ecm %>% 
+  filter(date > yearquarter("2022 Q4"))
+```
+
+```{r}
+ecm_model <- lm(d_it ~ d_infl_gap + d_output_gap + lag_resid, 
+                data = infl_data_tsbl_ecm)
+summary(ecm_model)
+```
+
+## 5.3: Compare ECM Forecasts (5 Points)
+
+```{r}
+ecm_model_train <- lm(d_it ~ d_infl_gap + d_output_gap + lag_resid, 
+                data = infl_data_tsbl_ecm_train)
+summary(ecm_model_train)
+```
+```{r}
+# forecast d_it
+ecm_fc <- forecast(ecm_model_train, newdata = as.data.frame(infl_data_tsbl_ecm_test))
+```
+
+```{r}
+d_hat <- ecm_fc$mean
+
+# Convert to level forecasts
+i_hat <- numeric(length(d_hat))
+# Start with last value of train data and recursively add
+i_hat[1] <- tail(infl_data_tsbl_ecm_train$FEDFUNDS_hampel, 1) + d_hat[1] 
+for (t in 2:length(d_hat)) {
+  i_hat[t] <- i_hat[t - 1] + d_hat[t]
+}
+
+ecm_rmse <- sqrt(mean((infl_data_tsbl_ecm_test$FEDFUNDS_hampel - i_hat)^2, na.rm = TRUE))
+
+ecm_rmse
+```
+
+```{r}
+ols_fc <- forecast(taylor_mod, newdata = as.data.frame(infl_data_tsbl_test))
+ols_pred <- ols_fc$mean
+ols_rmse <- sqrt(mean((infl_data_tsbl_test$FEDFUNDS_hampel - ols_pred)^2, na.rm = TRUE))
+ols_rmse
+```
+
+The ECM model performs slightly worse with a higher RMSE. 
